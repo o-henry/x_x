@@ -28,6 +28,39 @@ pub struct NotificationRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct NotificationCreateRequest {
+    pub notification_id: String,
+    pub workspace: String,
+    pub window_id: Option<WindowId>,
+    pub tab_id: Option<TabId>,
+    pub pane_id: Option<PaneId>,
+    pub kind: String,
+    pub title: String,
+    pub body: Option<String>,
+    pub unread_mode: NotificationUnreadMode,
+}
+
+impl NotificationCreateRequest {
+    pub fn into_record(self) -> NotificationRecord {
+        let now = utc_now();
+        NotificationRecord {
+            notification_id: self.notification_id,
+            workspace: self.workspace,
+            window_id: self.window_id,
+            tab_id: self.tab_id,
+            pane_id: self.pane_id,
+            kind: self.kind,
+            title: self.title,
+            body: self.body,
+            unread: true,
+            unread_mode: self.unread_mode,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 struct NotificationEntry {
     record: NotificationRecord,
@@ -193,6 +226,18 @@ impl NotificationStore {
         self.notifications
             .get(notification_id)
             .map(|entry| entry.anchor_pane_id)
+    }
+
+    pub fn rename_workspace(&mut self, old_workspace: &str, new_workspace: &str) -> usize {
+        let mut changed = 0;
+        for entry in self.notifications.values_mut() {
+            if entry.record.workspace == old_workspace {
+                entry.record.workspace = new_workspace.to_string();
+                entry.record.updated_at = utc_now();
+                changed += 1;
+            }
+        }
+        changed
     }
 
     fn navigate_unread_pane(

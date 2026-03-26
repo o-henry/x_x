@@ -48,6 +48,7 @@
 #![allow(clippy::never_loop)]
 
 use crate::client::{ClientId, ClientInfo};
+use crate::notification_store::{NotificationRecord, NotificationStore};
 use crate::pane::{CachePolicy, Pane, PaneId, PaneReader};
 use crate::pane_encoding::{decode_bytes_to_string, PaneOutputDecoder};
 use crate::ssh_agent::AgentProxy;
@@ -136,6 +137,7 @@ pub enum MuxNotification {
         tab_id: TabId,
         window_id: WindowId,
     },
+    NotificationsChanged,
     PaneFocused(PaneId),
     TabResized(TabId),
     TabTitleChanged {
@@ -166,6 +168,7 @@ pub struct Mux {
     clients: RwLock<HashMap<ClientId, ClientInfo>>,
     identity: RwLock<Option<Arc<ClientId>>>,
     num_panes_by_workspace: RwLock<HashMap<String, usize>>,
+    notification_store: RwLock<NotificationStore>,
     main_thread_id: std::thread::ThreadId,
     agent: Option<AgentProxy>,
     /// Dead flags for pane reader threads, used to signal thread termination
@@ -717,6 +720,7 @@ impl Mux {
             clients: RwLock::new(HashMap::new()),
             identity: RwLock::new(None),
             num_panes_by_workspace: RwLock::new(HashMap::new()),
+            notification_store: RwLock::new(NotificationStore::new()),
             main_thread_id: std::thread::current().id(),
             agent,
             pane_dead_flags: RwLock::new(HashMap::new()),
@@ -932,6 +936,14 @@ impl Mux {
                 ));
             }
         }
+
+        let updated = self
+            .notification_store
+            .write()
+            .rename_workspace(old_workspace, new_workspace);
+        if updated > 0 {
+            self.notify(MuxNotification::NotificationsChanged);
+        }
     }
 
     /// Overrides the current client identity.
@@ -968,6 +980,15 @@ impl Mux {
     }
 
     pub fn notify(&self, notification: MuxNotification) {
+        let notifications_changed = match &notification {
+            MuxNotification::PaneFocused(pane_id) => self
+                .notification_store
+                .write()
+                .apply_pane_focused(*pane_id)
+                > 0,
+            _ => false,
+        };
+
         // Collect subscribers while holding the lock briefly
         let subscribers: Vec<(usize, Arc<dyn Fn(MuxNotification) -> bool + Send + Sync>)> = self
             .subscribers
@@ -994,6 +1015,10 @@ impl Mux {
             for sub_id in to_remove {
                 subscribers.remove(&sub_id);
             }
+        }
+
+        if notifications_changed {
+            self.notify(MuxNotification::NotificationsChanged);
         }
     }
 
@@ -1395,6 +1420,163 @@ impl Mux {
         let (tab_id, domain_id) = ids?;
         let window_id = self.window_containing_tab(tab_id)?;
         Some((domain_id, window_id, tab_id))
+    }
+
+    pub fn create_notification(
+        &self,
+        record: NotificationRecord,
+    ) -> Result<NotificationRecord, Error> {
+        let anchor_pane_id = self
+            .resolve_notification_anchor_pane(
+                &record.workspace,
+                record.window_id,
+                record.tab_id,
+                record.pane_id,
+            )
+            .ok_or_else(|| anyhow!("unable to resolve anchor pane for notification"))?;
+
+        self.notification_store
+            .write()
+            .create_notification(record.clone(), anchor_pane_id);
+        self.notify(MuxNotification::NotificationsChanged);
+        Ok(record)
+    }
+
+    pub fn list_notifications(&self) -> Vec<NotificationRecord> {
+        self.notification_store.read().list_notifications()
+    }
+
+    pub fn clear_notifications(&self, notification_ids: &[String]) -> usize {
+        let cleared = self
+            .notification_store
+            .write()
+            .clear_notifications(notification_ids);
+        if cleared > 0 {
+            self.notify(MuxNotification::NotificationsChanged);
+        }
+        cleared
+    }
+
+    pub fn mark_notifications_read(&self, notification_ids: &[String]) -> usize {
+        let updated = self
+            .notification_store
+            .write()
+            .mark_notifications_read(notification_ids);
+        if updated > 0 {
+            self.notify(MuxNotification::NotificationsChanged);
+        }
+        updated
+    }
+
+    pub fn mark_notifications_unread(&self, notification_ids: &[String]) -> usize {
+        let updated = self
+            .notification_store
+            .write()
+            .mark_notifications_unread(notification_ids);
+        if updated > 0 {
+            self.notify(MuxNotification::NotificationsChanged);
+        }
+        updated
+    }
+
+    pub fn notification_unread_count_for_tab(&self, tab_id: TabId) -> usize {
+        let pane_ids = self
+            .get_tab(tab_id)
+            .map(|tab| {
+                tab.iter_panes_ignoring_zoom()
+                    .into_iter()
+                    .map(|pos| pos.pane.pane_id())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        self.notification_store
+            .read()
+            .unread_count_for_tab(tab_id, &pane_ids)
+    }
+
+    pub fn notification_unread_count_for_workspace(&self, workspace: &str) -> usize {
+        self.notification_store
+            .read()
+            .unread_count_for_workspace(workspace)
+    }
+
+    pub fn jump_next_unread_pane(&self, current: Option<PaneId>) -> Option<PaneId> {
+        let pane_order = self.notification_pane_order_for_scope(current);
+        self.notification_store
+            .read()
+            .next_unread_pane(&pane_order, current)
+    }
+
+    pub fn jump_prev_unread_pane(&self, current: Option<PaneId>) -> Option<PaneId> {
+        let pane_order = self.notification_pane_order_for_scope(current);
+        self.notification_store
+            .read()
+            .prev_unread_pane(&pane_order, current)
+    }
+
+    fn resolve_notification_anchor_pane(
+        &self,
+        workspace: &str,
+        window_id: Option<WindowId>,
+        tab_id: Option<TabId>,
+        pane_id: Option<PaneId>,
+    ) -> Option<PaneId> {
+        if let Some(pane_id) = pane_id {
+            if self.get_pane(pane_id).is_some() {
+                return Some(pane_id);
+            }
+        }
+
+        if let Some(tab_id) = tab_id {
+            return self
+                .get_tab(tab_id)
+                .and_then(|tab| tab.iter_panes_ignoring_zoom().into_iter().next())
+                .map(|pos| pos.pane.pane_id());
+        }
+
+        if let Some(window_id) = window_id {
+            return self.first_pane_for_window(window_id);
+        }
+
+        for window_id in self.iter_windows_in_workspace(workspace) {
+            if let Some(pane_id) = self.first_pane_for_window(window_id) {
+                return Some(pane_id);
+            }
+        }
+
+        None
+    }
+
+    fn first_pane_for_window(&self, window_id: WindowId) -> Option<PaneId> {
+        let window = self.get_window(window_id)?;
+        for tab in window.iter() {
+            if let Some(pos) = tab.iter_panes_ignoring_zoom().into_iter().next() {
+                return Some(pos.pane.pane_id());
+            }
+        }
+        None
+    }
+
+    fn notification_pane_order_for_scope(&self, current: Option<PaneId>) -> Vec<PaneId> {
+        let workspace = current
+            .and_then(|pane_id| self.resolve_pane_id(pane_id))
+            .and_then(|(_, window_id, _)| {
+                self.get_window(window_id)
+                    .map(|window| window.get_workspace().to_string())
+            })
+            .unwrap_or_else(|| self.active_workspace());
+
+        let mut pane_order = vec![];
+        for window_id in self.iter_windows_in_workspace(&workspace) {
+            if let Some(window) = self.get_window(window_id) {
+                for tab in window.iter() {
+                    for pos in tab.iter_panes_ignoring_zoom() {
+                        pane_order.push(pos.pane.pane_id());
+                    }
+                }
+            }
+        }
+        pane_order
     }
 
     pub fn domain_was_detached(&self, domain: DomainId) {
