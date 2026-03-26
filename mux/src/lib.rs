@@ -91,6 +91,7 @@ pub mod client;
 pub mod connui;
 pub mod domain;
 pub mod localpane;
+pub mod notification_store;
 pub mod pane;
 pub mod pane_encoding;
 pub mod renderable;
