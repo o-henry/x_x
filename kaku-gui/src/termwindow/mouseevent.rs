@@ -1557,12 +1557,13 @@ fn mouse_press_to_tmb(press: &MousePress) -> TMB {
 #[cfg(test)]
 mod tests {
     use super::{
-        mouse_dispatch_target, should_preserve_tmux_bypass_reporting, should_zoom_title_area,
-        MouseDispatchTarget,
+        mouse_dispatch_target, operator_marker_cursor, operator_marker_workspace_scope,
+        should_preserve_tmux_bypass_reporting, should_zoom_title_area, MouseDispatchTarget,
     };
+    use crate::tabbar::TabBarItem;
     use crate::termwindow::MouseCapture;
     use mux::pane::PaneId;
-    use window::{Modifiers, WindowDecorations};
+    use window::{Modifiers, MouseCursor, WindowDecorations};
 
     #[test]
     fn terminal_capture_keeps_release_routed_to_terminal() {
@@ -1627,5 +1628,48 @@ mod tests {
             false,
             true,
         ));
+    }
+
+    #[test]
+    fn operator_marker_workspace_scope_is_current_workspace_only_for_marker_hits() {
+        assert_eq!(
+            operator_marker_workspace_scope(
+                TabBarItem::OperatorMarker {
+                    tab_idx: 0,
+                    active: true,
+                },
+                Some("unity-main"),
+            )
+            .as_deref(),
+            Some("unity-main")
+        );
+        assert_eq!(
+            operator_marker_workspace_scope(
+                TabBarItem::Tab {
+                    tab_idx: 0,
+                    active: true,
+                },
+                Some("unity-main"),
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn operator_marker_hover_uses_hand_cursor_without_changing_other_tabbar_items() {
+        assert_eq!(
+            operator_marker_cursor(TabBarItem::OperatorMarker {
+                tab_idx: 0,
+                active: true,
+            }),
+            MouseCursor::Hand
+        );
+        assert_eq!(
+            operator_marker_cursor(TabBarItem::Tab {
+                tab_idx: 0,
+                active: true,
+            }),
+            MouseCursor::Arrow
+        );
     }
 }
