@@ -445,7 +445,7 @@ macro_rules! pdu {
 /// The overall version of the codec.
 /// This must be bumped when backwards incompatible changes
 /// are made to the types and protocol.
-pub const CODEC_VERSION: usize = 45;
+pub const CODEC_VERSION: usize = 46;
 
 // Defines the Pdu enum.
 // Each struct has an explicit identifying number.
@@ -506,6 +506,49 @@ pdu! {
     GetPaneDirection: 60,
     GetPaneDirectionResponse: 61,
     AdjustPaneSize: 62,
+    CreateNotification: 63,
+    CreateNotificationResponse: 64,
+    ListNotifications: 65,
+    ListNotificationsResponse: 66,
+    ClearNotifications: 67,
+    ClearNotificationsResponse: 68,
+    MarkNotificationsRead: 69,
+    MarkNotificationsUnread: 70,
+    MarkNotificationsResponse: 71,
+    JumpUnread: 72,
+    JumpUnreadResponse: 73,
+    IdentifyNotificationTarget: 74,
+    IdentifyNotificationTargetResponse: 75,
+    GetNotificationCapabilities: 76,
+    GetNotificationCapabilitiesResponse: 77,
+    SetWorkspaceStatus: 78,
+    SetWorkspaceStatusResponse: 79,
+    ClearWorkspaceStatus: 80,
+    ClearWorkspaceStatusResponse: 81,
+    ListWorkspaceStatus: 82,
+    ListWorkspaceStatusResponse: 83,
+    SetWorkspaceProgress: 84,
+    SetWorkspaceProgressResponse: 85,
+    ClearWorkspaceProgress: 86,
+    ClearWorkspaceProgressResponse: 87,
+    AppendWorkspaceLog: 88,
+    AppendWorkspaceLogResponse: 89,
+    ClearWorkspaceLog: 90,
+    ClearWorkspaceLogResponse: 91,
+    ListWorkspaceLog: 92,
+    ListWorkspaceLogResponse: 93,
+    ListTaskPanes: 94,
+    ListTaskPanesResponse: 95,
+    SetRemainOnExit: 96,
+    SetRemainOnExitResponse: 97,
+    RerunPane: 98,
+    RerunPaneResponse: 99,
+    RespawnPane: 100,
+    RespawnPaneResponse: 101,
+    SilenceWatchdog: 102,
+    SilenceWatchdogResponse: 103,
+    PipePane: 104,
+    PipePaneResponse: 105,
 }
 
 impl Pdu {
@@ -845,6 +888,312 @@ pub struct SetFocusedPane {
     pub pane_id: PaneId,
 }
 
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct NotificationRecordState {
+    pub notification_id: String,
+    pub workspace: String,
+    pub window_id: Option<WindowId>,
+    pub tab_id: Option<TabId>,
+    pub pane_id: Option<PaneId>,
+    pub kind: String,
+    pub title: String,
+    pub body: Option<String>,
+    pub unread: bool,
+    pub unread_mode: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct CreateNotification {
+    pub workspace: String,
+    pub window_id: Option<WindowId>,
+    pub tab_id: Option<TabId>,
+    pub pane_id: Option<PaneId>,
+    pub kind: String,
+    pub title: String,
+    pub body: Option<String>,
+    pub unread_mode: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct CreateNotificationResponse {
+    pub notification: NotificationRecordState,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListNotifications {
+    pub workspace: Option<String>,
+    pub window_id: Option<WindowId>,
+    pub tab_id: Option<TabId>,
+    pub pane_id: Option<PaneId>,
+    pub unread_only: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListNotificationsResponse {
+    pub notifications: Vec<NotificationRecordState>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearNotifications {
+    pub notification_ids: Vec<String>,
+    pub workspace: Option<String>,
+    pub tab_id: Option<TabId>,
+    pub pane_id: Option<PaneId>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearNotificationsResponse {
+    pub cleared_count: usize,
+    pub notification_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct MarkNotificationsRead {
+    pub notification_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct MarkNotificationsUnread {
+    pub notification_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct MarkNotificationsResponse {
+    pub updated_count: usize,
+    pub notification_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct JumpUnread {
+    pub pane_id: PaneId,
+    pub direction: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct JumpUnreadResponse {
+    pub pane_id: Option<PaneId>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct IdentifyNotificationTarget {
+    pub pane_id: PaneId,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct IdentifyNotificationTargetResponse {
+    pub workspace: String,
+    pub window_id: WindowId,
+    pub tab_id: TabId,
+    pub pane_id: PaneId,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct GetNotificationCapabilities {}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct GetNotificationCapabilitiesResponse {
+    pub notification_commands: Vec<String>,
+    pub unread_modes: Vec<String>,
+    pub supports_tabbar_markers: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct WorkspaceStatusState {
+    pub workspace: String,
+    pub status: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct WorkspaceProgressState {
+    pub workspace: String,
+    pub value: u8,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct WorkspaceLogState {
+    pub workspace: String,
+    pub seq: u64,
+    pub message: String,
+    pub created_at: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct TaskPaneState {
+    pub pane_id: PaneId,
+    pub workspace: Option<String>,
+    pub window_id: Option<WindowId>,
+    pub tab_id: Option<TabId>,
+    pub remain_on_exit: bool,
+    pub silenced: bool,
+    pub is_dead: bool,
+    pub is_failed: bool,
+    pub rerun_available: bool,
+    pub tee_path: Option<String>,
+    pub current_working_dir: Option<String>,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetWorkspaceStatus {
+    pub workspace: String,
+    pub status: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetWorkspaceStatusResponse {
+    pub status: WorkspaceStatusState,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceStatus {
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceStatusResponse {
+    pub cleared_count: usize,
+    pub workspaces: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceStatus {
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceStatusResponse {
+    pub statuses: Vec<WorkspaceStatusState>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetWorkspaceProgress {
+    pub workspace: String,
+    pub value: u8,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetWorkspaceProgressResponse {
+    pub progress: WorkspaceProgressState,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceProgress {
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceProgressResponse {
+    pub cleared_count: usize,
+    pub workspaces: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct AppendWorkspaceLog {
+    pub workspace: String,
+    pub message: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct AppendWorkspaceLogResponse {
+    pub entry: WorkspaceLogState,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceLog {
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ClearWorkspaceLogResponse {
+    pub cleared_count: usize,
+    pub workspaces: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceLog {
+    pub workspace: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceLogResponse {
+    pub entries: Vec<WorkspaceLogState>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListTaskPanes {
+    pub pane_id: Option<PaneId>,
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListTaskPanesResponse {
+    pub task_panes: Vec<TaskPaneState>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetRemainOnExit {
+    pub pane_id: PaneId,
+    pub remain_on_exit: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SetRemainOnExitResponse {
+    pub pane: TaskPaneState,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct RerunPane {
+    pub pane_id: PaneId,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct RerunPaneResponse {
+    pub pane_id: PaneId,
+    pub spawned_pane_id: PaneId,
+    pub status: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct RespawnPane {
+    pub pane_id: PaneId,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct RespawnPaneResponse {
+    pub pane_id: PaneId,
+    pub spawned_pane_id: PaneId,
+    pub status: String,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SilenceWatchdog {
+    pub pane_id: PaneId,
+    pub silenced: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct SilenceWatchdogResponse {
+    pub pane_id: PaneId,
+    pub silenced: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct PipePane {
+    pub pane_id: PaneId,
+    pub file_path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct PipePaneResponse {
+    pub pane_id: PaneId,
+    pub tee_path: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, PartialEq, Debug)]
 pub struct GetClientList;
 
@@ -1149,6 +1498,222 @@ pub struct GetImageCellResponse {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde::ser::{self, Impossible, SerializeStruct, Serializer};
+
+    #[derive(Debug)]
+    struct FieldNameCollectorError;
+
+    impl std::fmt::Display for FieldNameCollectorError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("field name collector only supports struct serialization")
+        }
+    }
+
+    impl std::error::Error for FieldNameCollectorError {}
+
+    impl ser::Error for FieldNameCollectorError {
+        fn custom<T>(_msg: T) -> Self
+        where
+            T: std::fmt::Display,
+        {
+            Self
+        }
+    }
+
+    struct FieldNameCollector;
+
+    struct FieldNameStructCollector {
+        fields: Vec<String>,
+    }
+
+    impl SerializeStruct for FieldNameStructCollector {
+        type Ok = Vec<String>;
+        type Error = FieldNameCollectorError;
+
+        fn serialize_field<T>(&mut self, key: &'static str, _value: &T) -> Result<(), Self::Error>
+        where
+            T: ?Sized + Serialize,
+        {
+            self.fields.push(key.to_string());
+            Ok(())
+        }
+
+        fn end(self) -> Result<Self::Ok, Self::Error> {
+            Ok(self.fields)
+        }
+    }
+
+    impl Serializer for FieldNameCollector {
+        type Ok = Vec<String>;
+        type Error = FieldNameCollectorError;
+        type SerializeSeq = Impossible<Vec<String>, FieldNameCollectorError>;
+        type SerializeTuple = Impossible<Vec<String>, FieldNameCollectorError>;
+        type SerializeTupleStruct = Impossible<Vec<String>, FieldNameCollectorError>;
+        type SerializeTupleVariant = Impossible<Vec<String>, FieldNameCollectorError>;
+        type SerializeMap = Impossible<Vec<String>, FieldNameCollectorError>;
+        type SerializeStruct = FieldNameStructCollector;
+        type SerializeStructVariant = Impossible<Vec<String>, FieldNameCollectorError>;
+
+        fn serialize_struct(
+            self,
+            _name: &'static str,
+            _len: usize,
+        ) -> Result<Self::SerializeStruct, Self::Error> {
+            Ok(FieldNameStructCollector { fields: Vec::new() })
+        }
+
+        fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_i8(self, _v: i8) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_i16(self, _v: i16) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_i32(self, _v: i32) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_i64(self, _v: i64) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_u8(self, _v: u8) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_u16(self, _v: u16) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_u32(self, _v: u32) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_u64(self, _v: u64) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_f32(self, _v: f32) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_f64(self, _v: f64) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_char(self, _v: char) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_str(self, _v: &str) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_bytes(self, _v: &[u8]) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_some<T>(self, _value: &T) -> Result<Self::Ok, Self::Error>
+        where
+            T: ?Sized + Serialize,
+        {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_unit_variant(
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+        ) -> Result<Self::Ok, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_newtype_struct<T>(
+            self,
+            _name: &'static str,
+            _value: &T,
+        ) -> Result<Self::Ok, Self::Error>
+        where
+            T: ?Sized + Serialize,
+        {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_newtype_variant<T>(
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _value: &T,
+        ) -> Result<Self::Ok, Self::Error>
+        where
+            T: ?Sized + Serialize,
+        {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_tuple_struct(
+            self,
+            _name: &'static str,
+            _len: usize,
+        ) -> Result<Self::SerializeTupleStruct, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_tuple_variant(
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _len: usize,
+        ) -> Result<Self::SerializeTupleVariant, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+
+        fn serialize_struct_variant(
+            self,
+            _name: &'static str,
+            _variant_index: u32,
+            _variant: &'static str,
+            _len: usize,
+        ) -> Result<Self::SerializeStructVariant, Self::Error> {
+            Err(FieldNameCollectorError)
+        }
+    }
+
+    fn collect_struct_fields<T: Serialize>(value: &T) -> Vec<String> {
+        value.serialize(FieldNameCollector).expect("struct fields")
+    }
 
     #[test]
     fn test_frame() {
@@ -1265,5 +1830,432 @@ mod test {
             },
             Pdu::decode(encoded.as_slice()).unwrap()
         );
+    }
+
+    #[test]
+    fn notification_payloads_serialize_scope_fields_with_stable_names() {
+        let notification = NotificationRecordState {
+            notification_id: "notif-1".to_string(),
+            workspace: "alpha".to_string(),
+            window_id: Some(11),
+            tab_id: Some(TabId::new(21)),
+            pane_id: None,
+            kind: "task".to_string(),
+            title: "Build failed".to_string(),
+            body: Some("See logs".to_string()),
+            unread: true,
+            unread_mode: "sticky".to_string(),
+            created_at: "2026-03-26T00:00:00Z".to_string(),
+            updated_at: "2026-03-26T00:00:00Z".to_string(),
+        };
+        let create = CreateNotification {
+            workspace: "alpha".to_string(),
+            window_id: Some(11),
+            tab_id: Some(TabId::new(21)),
+            pane_id: None,
+            kind: "task".to_string(),
+            title: "Build failed".to_string(),
+            body: Some("See logs".to_string()),
+            unread_mode: "sticky".to_string(),
+        };
+        assert_eq!(notification.notification_id, "notif-1".to_string());
+        assert_eq!(notification.workspace, "alpha".to_string());
+        assert_eq!(notification.window_id, Some(11));
+        assert_eq!(notification.tab_id, Some(TabId::new(21)));
+        assert_eq!(notification.pane_id, None);
+        assert_eq!(notification.kind, "task".to_string());
+        assert_eq!(notification.title, "Build failed".to_string());
+        assert_eq!(notification.body, Some("See logs".to_string()));
+        assert!(notification.unread);
+        assert_eq!(notification.unread_mode, "sticky".to_string());
+        assert_eq!(notification.created_at, "2026-03-26T00:00:00Z".to_string());
+        assert_eq!(notification.updated_at, "2026-03-26T00:00:00Z".to_string());
+
+        assert_eq!(create.workspace, "alpha".to_string());
+        assert_eq!(create.window_id, Some(11));
+        assert_eq!(create.tab_id, Some(TabId::new(21)));
+        assert_eq!(create.pane_id, None);
+        assert_eq!(create.kind, "task".to_string());
+        assert_eq!(create.title, "Build failed".to_string());
+        assert_eq!(create.body, Some("See logs".to_string()));
+        assert_eq!(create.unread_mode, "sticky".to_string());
+    }
+
+    #[test]
+    fn notification_pdus_round_trip_through_codec() {
+        fn assert_round_trip(pdu: Pdu) {
+            let mut encoded = Vec::new();
+            pdu.encode(&mut encoded, 77).unwrap();
+            let decoded = Pdu::decode(encoded.as_slice()).unwrap();
+            assert_eq!(decoded.serial, 77);
+            assert_eq!(decoded.pdu, pdu);
+        }
+
+        let notification = NotificationRecordState {
+            notification_id: "notif-1".to_string(),
+            workspace: "alpha".to_string(),
+            window_id: Some(11),
+            tab_id: Some(TabId::new(21)),
+            pane_id: Some(PaneId::new(31)),
+            kind: "task".to_string(),
+            title: "Build failed".to_string(),
+            body: Some("See logs".to_string()),
+            unread: true,
+            unread_mode: "clear-on-focus".to_string(),
+            created_at: "2026-03-26T00:00:00Z".to_string(),
+            updated_at: "2026-03-26T00:00:01Z".to_string(),
+        };
+
+        assert_round_trip(Pdu::CreateNotification(CreateNotification {
+            workspace: "alpha".to_string(),
+            window_id: Some(11),
+            tab_id: Some(TabId::new(21)),
+            pane_id: Some(PaneId::new(31)),
+            kind: "task".to_string(),
+            title: "Build failed".to_string(),
+            body: Some("See logs".to_string()),
+            unread_mode: "clear-on-focus".to_string(),
+        }));
+        assert_round_trip(Pdu::CreateNotificationResponse(
+            CreateNotificationResponse {
+                notification: notification.clone(),
+            },
+        ));
+        assert_round_trip(Pdu::ListNotifications(ListNotifications {
+            workspace: Some("alpha".to_string()),
+            window_id: Some(11),
+            tab_id: Some(TabId::new(21)),
+            pane_id: Some(PaneId::new(31)),
+            unread_only: true,
+        }));
+        assert_round_trip(Pdu::ListNotificationsResponse(ListNotificationsResponse {
+            notifications: vec![notification.clone()],
+        }));
+        assert_round_trip(Pdu::ClearNotifications(ClearNotifications {
+            notification_ids: vec!["notif-1".to_string()],
+            workspace: Some("alpha".to_string()),
+            tab_id: Some(TabId::new(21)),
+            pane_id: Some(PaneId::new(31)),
+        }));
+        assert_round_trip(Pdu::ClearNotificationsResponse(
+            ClearNotificationsResponse {
+                cleared_count: 1,
+                notification_ids: vec!["notif-1".to_string()],
+            },
+        ));
+        assert_round_trip(Pdu::MarkNotificationsRead(MarkNotificationsRead {
+            notification_ids: vec!["notif-1".to_string()],
+        }));
+        assert_round_trip(Pdu::MarkNotificationsUnread(MarkNotificationsUnread {
+            notification_ids: vec!["notif-1".to_string()],
+        }));
+        assert_round_trip(Pdu::MarkNotificationsResponse(MarkNotificationsResponse {
+            updated_count: 1,
+            notification_ids: vec!["notif-1".to_string()],
+        }));
+        assert_round_trip(Pdu::JumpUnread(JumpUnread {
+            pane_id: PaneId::new(31),
+            direction: "next".to_string(),
+        }));
+        assert_round_trip(Pdu::JumpUnreadResponse(JumpUnreadResponse {
+            pane_id: Some(PaneId::new(32)),
+        }));
+        assert_round_trip(Pdu::IdentifyNotificationTarget(
+            IdentifyNotificationTarget {
+                pane_id: PaneId::new(31),
+            },
+        ));
+        assert_round_trip(Pdu::IdentifyNotificationTargetResponse(
+            IdentifyNotificationTargetResponse {
+                workspace: "alpha".to_string(),
+                window_id: 11,
+                tab_id: TabId::new(21),
+                pane_id: PaneId::new(31),
+            },
+        ));
+        assert_round_trip(Pdu::GetNotificationCapabilities(
+            GetNotificationCapabilities {},
+        ));
+        assert_round_trip(Pdu::GetNotificationCapabilitiesResponse(
+            GetNotificationCapabilitiesResponse {
+                notification_commands: vec!["notify".to_string()],
+                unread_modes: vec!["clear-on-focus".to_string(), "sticky".to_string()],
+                supports_tabbar_markers: true,
+            },
+        ));
+    }
+
+    #[test]
+    fn workspace_metadata_payloads_serialize_stable_field_names() {
+        let status = WorkspaceStatusState {
+            workspace: "unity-main".to_string(),
+            status: "running tests".to_string(),
+            updated_at: "2026-03-27T00:00:00Z".to_string(),
+        };
+        let progress = WorkspaceProgressState {
+            workspace: "unity-main".to_string(),
+            value: 73,
+            updated_at: "2026-03-27T00:00:05Z".to_string(),
+        };
+        let entry_one = WorkspaceLogState {
+            workspace: "unity-main".to_string(),
+            seq: 7,
+            message: "build started".to_string(),
+            created_at: "2026-03-27T00:00:10Z".to_string(),
+        };
+        let entry_two = WorkspaceLogState {
+            workspace: "unity-main".to_string(),
+            seq: 8,
+            message: "build finished".to_string(),
+            created_at: "2026-03-27T00:00:15Z".to_string(),
+        };
+
+        let progress_fields = collect_struct_fields(&progress);
+        let log_fields = collect_struct_fields(&entry_one);
+        let list_response = ListWorkspaceLogResponse {
+            entries: vec![entry_one.clone(), entry_two.clone()],
+        };
+
+        assert_eq!(
+            collect_struct_fields(&status),
+            vec!["workspace", "status", "updated_at"]
+        );
+        assert_eq!(status.workspace, "unity-main".to_string());
+        assert_eq!(status.status, "running tests".to_string());
+        assert_eq!(status.updated_at, "2026-03-27T00:00:00Z".to_string());
+
+        assert_eq!(progress_fields, vec!["workspace", "value", "updated_at"]);
+        assert_eq!(progress.workspace, "unity-main".to_string());
+        assert_eq!(progress.value, 73);
+        assert_eq!(progress.updated_at, "2026-03-27T00:00:05Z".to_string());
+
+        assert_eq!(
+            log_fields,
+            vec!["workspace", "seq", "message", "created_at"]
+        );
+        assert_eq!(entry_one.workspace, "unity-main".to_string());
+        assert_eq!(entry_one.seq, 7);
+        assert_eq!(entry_one.message, "build started".to_string());
+        assert_eq!(entry_one.created_at, "2026-03-27T00:00:10Z".to_string());
+
+        assert_eq!(collect_struct_fields(&list_response), vec!["entries"]);
+        assert_eq!(list_response.entries, vec![entry_one, entry_two]);
+    }
+
+    #[test]
+    fn workspace_metadata_pdus_round_trip_with_mutation_summaries() {
+        fn assert_round_trip(pdu: Pdu) {
+            let mut encoded = Vec::new();
+            pdu.encode(&mut encoded, 88).unwrap();
+            let decoded = Pdu::decode(encoded.as_slice()).unwrap();
+            assert_eq!(decoded.serial, 88);
+            assert_eq!(decoded.pdu, pdu);
+        }
+
+        let status = WorkspaceStatusState {
+            workspace: "unity-main".to_string(),
+            status: "idle".to_string(),
+            updated_at: "2026-03-27T00:00:00Z".to_string(),
+        };
+        let progress = WorkspaceProgressState {
+            workspace: "unity-main".to_string(),
+            value: 42,
+            updated_at: "2026-03-27T00:00:01Z".to_string(),
+        };
+        let entry = WorkspaceLogState {
+            workspace: "unity-main".to_string(),
+            seq: 12,
+            message: "tests passed".to_string(),
+            created_at: "2026-03-27T00:00:02Z".to_string(),
+        };
+
+        let clear_status = ClearWorkspaceStatusResponse {
+            cleared_count: 2,
+            workspaces: vec!["unity-main".to_string(), "unity-tools".to_string()],
+        };
+        let clear_progress = ClearWorkspaceProgressResponse {
+            cleared_count: 1,
+            workspaces: vec!["unity-main".to_string()],
+        };
+        let clear_log = ClearWorkspaceLogResponse {
+            cleared_count: 1,
+            workspaces: vec!["unity-main".to_string()],
+        };
+
+        assert_eq!(
+            collect_struct_fields(&clear_status),
+            vec!["cleared_count", "workspaces"]
+        );
+        assert_eq!(clear_status.cleared_count, 2);
+        assert_eq!(
+            clear_status.workspaces,
+            vec!["unity-main".to_string(), "unity-tools".to_string()]
+        );
+        assert_eq!(
+            collect_struct_fields(&clear_progress),
+            vec!["cleared_count", "workspaces"]
+        );
+        assert_eq!(clear_progress.cleared_count, 1);
+        assert_eq!(clear_progress.workspaces, vec!["unity-main".to_string()]);
+        assert_eq!(
+            collect_struct_fields(&clear_log),
+            vec!["cleared_count", "workspaces"]
+        );
+        assert_eq!(clear_log.cleared_count, 1);
+        assert_eq!(clear_log.workspaces, vec!["unity-main".to_string()]);
+
+        assert_round_trip(Pdu::SetWorkspaceStatus(SetWorkspaceStatus {
+            workspace: "unity-main".to_string(),
+            status: "idle".to_string(),
+        }));
+        assert_round_trip(Pdu::SetWorkspaceStatusResponse(
+            SetWorkspaceStatusResponse {
+                status: status.clone(),
+            },
+        ));
+        assert_round_trip(Pdu::ClearWorkspaceStatus(ClearWorkspaceStatus {
+            workspace: Some("unity-main".to_string()),
+        }));
+        assert_round_trip(Pdu::ClearWorkspaceStatusResponse(clear_status));
+        assert_round_trip(Pdu::ListWorkspaceStatus(ListWorkspaceStatus {
+            workspace: None,
+        }));
+        assert_round_trip(Pdu::ListWorkspaceStatusResponse(
+            ListWorkspaceStatusResponse {
+                statuses: vec![status],
+            },
+        ));
+        assert_round_trip(Pdu::SetWorkspaceProgress(SetWorkspaceProgress {
+            workspace: "unity-main".to_string(),
+            value: 42,
+        }));
+        assert_round_trip(Pdu::SetWorkspaceProgressResponse(
+            SetWorkspaceProgressResponse { progress: progress },
+        ));
+        assert_round_trip(Pdu::ClearWorkspaceProgress(ClearWorkspaceProgress {
+            workspace: None,
+        }));
+        assert_round_trip(Pdu::ClearWorkspaceProgressResponse(clear_progress));
+        assert_round_trip(Pdu::AppendWorkspaceLog(AppendWorkspaceLog {
+            workspace: "unity-main".to_string(),
+            message: "tests passed".to_string(),
+        }));
+        assert_round_trip(Pdu::AppendWorkspaceLogResponse(
+            AppendWorkspaceLogResponse {
+                entry: entry.clone(),
+            },
+        ));
+        assert_round_trip(Pdu::ClearWorkspaceLog(ClearWorkspaceLog {
+            workspace: Some("unity-main".to_string()),
+        }));
+        assert_round_trip(Pdu::ClearWorkspaceLogResponse(clear_log));
+        assert_round_trip(Pdu::ListWorkspaceLog(ListWorkspaceLog {
+            workspace: Some("unity-main".to_string()),
+            limit: Some(25),
+        }));
+        assert_round_trip(Pdu::ListWorkspaceLogResponse(ListWorkspaceLogResponse {
+            entries: vec![entry],
+        }));
+
+        let task_pane = TaskPaneState {
+            pane_id: PaneId::new(9),
+            workspace: Some("unity-main".to_string()),
+            window_id: Some(4),
+            tab_id: Some(TabId::new(3)),
+            remain_on_exit: true,
+            silenced: false,
+            is_dead: true,
+            is_failed: true,
+            rerun_available: true,
+            tee_path: Some("/tmp/task.log".to_string()),
+            current_working_dir: Some("file:///tmp/project".to_string()),
+            updated_at: "2026-03-27T00:00:02Z".to_string(),
+        };
+
+        assert_eq!(
+            collect_struct_fields(&task_pane),
+            vec![
+                "pane_id",
+                "workspace",
+                "window_id",
+                "tab_id",
+                "remain_on_exit",
+                "silenced",
+                "is_dead",
+                "is_failed",
+                "rerun_available",
+                "tee_path",
+                "current_working_dir",
+                "updated_at",
+            ]
+        );
+
+        let set_remain = SetRemainOnExitResponse {
+            pane: task_pane.clone(),
+        };
+        let rerun = RerunPaneResponse {
+            pane_id: PaneId::new(9),
+            spawned_pane_id: PaneId::new(12),
+            status: "rerun".to_string(),
+        };
+        let respawn = RespawnPaneResponse {
+            pane_id: PaneId::new(9),
+            spawned_pane_id: PaneId::new(13),
+            status: "respawned".to_string(),
+        };
+        let silence = SilenceWatchdogResponse {
+            pane_id: PaneId::new(9),
+            silenced: true,
+        };
+        let pipe = PipePaneResponse {
+            pane_id: PaneId::new(9),
+            tee_path: Some("/tmp/task.log".to_string()),
+        };
+
+        assert_eq!(collect_struct_fields(&set_remain), vec!["pane"]);
+        assert_eq!(
+            collect_struct_fields(&rerun),
+            vec!["pane_id", "spawned_pane_id", "status"]
+        );
+        assert_eq!(
+            collect_struct_fields(&respawn),
+            vec!["pane_id", "spawned_pane_id", "status"]
+        );
+        assert_eq!(collect_struct_fields(&silence), vec!["pane_id", "silenced"]);
+        assert_eq!(collect_struct_fields(&pipe), vec!["pane_id", "tee_path"]);
+
+        assert_round_trip(Pdu::ListTaskPanes(ListTaskPanes {
+            pane_id: Some(PaneId::new(9)),
+            workspace: Some("unity-main".to_string()),
+        }));
+        assert_round_trip(Pdu::ListTaskPanesResponse(ListTaskPanesResponse {
+            task_panes: vec![task_pane.clone()],
+        }));
+        assert_round_trip(Pdu::SetRemainOnExit(SetRemainOnExit {
+            pane_id: PaneId::new(9),
+            remain_on_exit: true,
+        }));
+        assert_round_trip(Pdu::SetRemainOnExitResponse(set_remain));
+        assert_round_trip(Pdu::RerunPane(RerunPane {
+            pane_id: PaneId::new(9),
+        }));
+        assert_round_trip(Pdu::RerunPaneResponse(rerun));
+        assert_round_trip(Pdu::RespawnPane(RespawnPane {
+            pane_id: PaneId::new(9),
+        }));
+        assert_round_trip(Pdu::RespawnPaneResponse(respawn));
+        assert_round_trip(Pdu::SilenceWatchdog(SilenceWatchdog {
+            pane_id: PaneId::new(9),
+            silenced: true,
+        }));
+        assert_round_trip(Pdu::SilenceWatchdogResponse(silence));
+        assert_round_trip(Pdu::PipePane(PipePane {
+            pane_id: PaneId::new(9),
+            file_path: Some("/tmp/task.log".to_string()),
+        }));
+        assert_round_trip(Pdu::PipePaneResponse(pipe));
+        assert_round_trip(Pdu::TaskPaneChanged(TaskPaneChanged {
+            pane_id: PaneId::new(9),
+        }));
     }
 }

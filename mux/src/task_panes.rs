@@ -331,6 +331,59 @@ mod tests {
     }
 
     #[test]
+    fn prune_missing_keeps_dead_records_with_retention_signals() {
+        let mut store = TaskPaneStore::new();
+        let failed = PaneId::new(3);
+        let rerunnable = PaneId::new(4);
+        let stale_live = PaneId::new(5);
+
+        store.record_exit(TaskPaneExitRecord {
+            pane_id: failed,
+            workspace: Some("default".to_string()),
+            window_id: Some(0),
+            tab_id: Some(TabId::new(0)),
+            remain_on_exit: false,
+            is_failed: true,
+            exit_behavior: ExitBehavior::CloseOnCleanExit,
+            current_working_dir: None,
+            rerun: HashMap::new(),
+        });
+
+        let mut rerun = HashMap::new();
+        rerun.insert("KAKU_RERUN_COMMAND".to_string(), "cargo test".to_string());
+        store.record_exit(TaskPaneExitRecord {
+            pane_id: rerunnable,
+            workspace: Some("default".to_string()),
+            window_id: Some(0),
+            tab_id: Some(TabId::new(0)),
+            remain_on_exit: false,
+            is_failed: false,
+            exit_behavior: ExitBehavior::CloseOnCleanExit,
+            current_working_dir: None,
+            rerun,
+        });
+        store.upsert_live(
+            stale_live,
+            Some("default".to_string()),
+            Some(0),
+            Some(TabId::new(0)),
+            false,
+            false,
+        );
+
+        assert_eq!(store.prune_missing(&HashSet::new()), 1);
+        assert!(store.task_pane(failed).is_some(), "failed panes should be retained");
+        assert!(
+            store.task_pane(rerunnable).is_some(),
+            "rerunnable panes should be retained"
+        );
+        assert!(
+            store.task_pane(stale_live).is_none(),
+            "live panes missing from mux should be pruned"
+        );
+    }
+
+    #[test]
     fn rerun_metadata_filter_keeps_only_rerun_keys() {
         let user_vars = HashMap::from([
             ("KAKU_RERUN_COMMAND".to_string(), "cargo test".to_string()),
