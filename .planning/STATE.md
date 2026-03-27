@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered (assumptions mode)
-last_updated: "2026-03-27T08:10:45.529Z"
+stopped_at: Completed 05-hardening-and-compatibility-01-PLAN.md
+last_updated: "2026-03-27T10:41:06.555Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 15
-  completed_plans: 15
+  completed_phases: 4
+  total_plans: 24
+  completed_plans: 21
   percent: 0
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** A solo Unity developer can see which pane needs attention, keep failed work visible, and recover or navigate quickly without leaving Kaku's existing UX model.
-**Current focus:** Phase 02 — workspace-metadata-plane
+**Current focus:** Phase 05 — hardening-and-compatibility
 
 ## Current Position
 
-Phase: 02 (workspace-metadata-plane) — EXECUTING
-Plan: 3 of 5
+Phase: 05 (hardening-and-compatibility) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
 Last activity: 2026-03-27
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase 02-workspace-metadata-plane P04 | 16min | 2 tasks | 4 files |
 | Phase 02-workspace-metadata-plane P03 | 25 min | 2 tasks | 9 files |
+| Phase 05-hardening-and-compatibility P01 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - Initialization: Follow the canonical five-phase order without widening scope beyond notifications, metadata, Task Center, lifecycle, and hardening.
 - [Phase 02-workspace-metadata-plane]: Mutation commands print only stable payload fields instead of transport wrapper keys so machine consumers see the exact documented contract.
 - [Phase 02-workspace-metadata-plane]: Workspace metadata list commands reuse CliOutputFormatKind and explicit table columns to keep JSON/table contracts aligned with existing Kaku CLI patterns.
+- [Phase 05-hardening-and-compatibility]: Preserve the last known working directory on immediate task-pane failures so list-task-panes and rerun validation keep usable lifecycle context.
 
 ### Pending Todos
 
@@ -78,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T08:10:45.524Z
-Stopped at: Phase 4 context gathered (assumptions mode)
-Resume file: .planning/phases/04-task-pane-lifecycle/04-CONTEXT.md
+Last session: 2026-03-27T10:41:06.548Z
+Stopped at: Completed 05-hardening-and-compatibility-01-PLAN.md
+Resume file: None
