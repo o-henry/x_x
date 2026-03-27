@@ -215,12 +215,29 @@ pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
         "no pane".to_string()
     };
 
-    prefix_unread_marker(tab, base_title)
+    prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, base_title))
 }
 
 fn prefix_unread_marker(tab: &TabInformation, title: String) -> String {
     if tab.unread_notification_count > 0 {
         format!("! {title}")
+    } else {
+        title
+    }
+}
+
+fn workspace_metadata_suffix(tab: &TabInformation) -> Option<String> {
+    match (&tab.workspace_status, tab.workspace_progress) {
+        (Some(status), Some(progress)) => Some(format!(" · [{status}] {progress}%")),
+        (Some(status), None) => Some(format!(" · [{status}]")),
+        (None, Some(progress)) => Some(format!(" · {progress}%")),
+        (None, None) => None,
+    }
+}
+
+fn apply_workspace_metadata_suffix(tab: &TabInformation, title: String) -> String {
+    if let Some(suffix) = workspace_metadata_suffix(tab) {
+        format!("{title}{suffix}")
     } else {
         title
     }
@@ -235,7 +252,7 @@ fn build_default_title(
 ) -> TitleText {
     let mut items = vec![];
     let mut len = 0;
-    let mut title = prefix_unread_marker(tab, title.to_string());
+    let mut title = prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, title.to_string()));
 
     let classic_spacing = if config.use_fancy_tab_bar { "" } else { " " };
     if with_tab_index && config.show_tab_index_in_tab_bar {
@@ -1011,6 +1028,17 @@ mod test {
         }
     }
 
+    fn sample_tab_with_metadata(
+        unread_notification_count: usize,
+        workspace_status: Option<&str>,
+        workspace_progress: Option<u8>,
+    ) -> TabInformation {
+        let mut tab = sample_tab(unread_notification_count);
+        tab.workspace_status = workspace_status.map(str::to_string);
+        tab.workspace_progress = workspace_progress;
+        tab
+    }
+
     #[test]
     fn compute_tab_plain_title_prefixes_unread_marker_when_notifications_exist() {
         let tab = sample_tab(2);
@@ -1021,6 +1049,24 @@ mod test {
     fn compute_tab_plain_title_keeps_existing_behavior_without_unread_notifications() {
         let tab = sample_tab(0);
         assert_eq!(compute_tab_plain_title(&tab), "no pane");
+    }
+
+    #[test]
+    fn compute_tab_plain_title_appends_workspace_status_suffix() {
+        let tab = sample_tab_with_metadata(0, Some("blocked"), None);
+        assert_eq!(compute_tab_plain_title(&tab), "no pane · [blocked]");
+    }
+
+    #[test]
+    fn compute_tab_plain_title_appends_workspace_progress_suffix() {
+        let tab = sample_tab_with_metadata(0, None, Some(37));
+        assert_eq!(compute_tab_plain_title(&tab), "no pane · 37%");
+    }
+
+    #[test]
+    fn compute_tab_plain_title_combines_unread_prefix_and_workspace_metadata() {
+        let tab = sample_tab_with_metadata(2, Some("blocked"), Some(37));
+        assert_eq!(compute_tab_plain_title(&tab), "! no pane · [blocked] 37%");
     }
 
     #[test]
