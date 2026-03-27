@@ -298,6 +298,30 @@ Known Phase 5 boundaries:
 - lifecycle records intentionally favor inspectability over aggressive cleanup; long-lived sessions still depend on explicit cleanup/pruning boundaries
 - manual Wave 4 verification focused on the default workspace compatibility path and failing-pane survivability; broader multi-workspace/window interaction still relies on the preserved baseline command surface plus existing automated coverage
 
+### Phase 6 — Operator UI surfaces
+Shipped operator outcomes:
+
+- Task Center as the primary operator surface for the common control-plane path
+- compact tabbar discovery affordances that expose actionable operator state without turning the tab rail into a workflow hub
+- visible active-row actions for focus, clear unread, rerun/respawn, remain-on-exit toggles, and workspace metadata edits where the selected row supports them
+- mouse+keyboard parity inside Task Center, including single-click selection, double-click primary action, inline action hit targets, and the existing keyboard path
+- prompt/confirm metadata editing for workspace status and progress instead of a new inspector or dashboard panel
+- additive to Kaku: the shipped operator work stays inside existing command, overlay, tabbar, and termwindow seams rather than replacing the shell
+
+Phase 6 concrete shipped shape:
+
+- native `ShowTaskCenter` command remains the entry point from existing Kaku command surfaces
+- `TermWindow` owns scoped Task Center opening, workspace metadata refresh/mutation, and remain-on-exit row-action handoff
+- Task Center keeps one normalized list over mux-owned snapshot data and exposes compact inline actions on the active row only
+- tabbar operator markers render as a compact ` · ops` suffix with a dedicated hit region for actionable tabs
+- operator-marker clicks hand off into a scoped Task Center view for the current workspace instead of opening a second shell
+
+Known Phase 6 boundaries:
+
+- the targeted `kaku-gui` closeout suite now covers the common operator workflow, but the 2026-03-27 closeout reattempt did not produce a fresh responsive GUI socket for a renewed live desktop pass
+- tabbar markers intentionally stop at discoverability and Task Center handoff; they do not host inline editing or multi-action chrome
+- workspace metadata editing is limited to status and progress through prompt/confirm metadata editing, with logs still left to the CLI path
+
 ## 5. Non-Goals
 
 These are explicitly out of scope for v1:
@@ -320,6 +344,9 @@ Prefer this order:
 2. right-status / status surfaces
 3. overlay
 4. Task Center
+
+Shipped operator rule:
+- keep Task Center as the primary operator surface and keep every new affordance additive to Kaku
 
 Only consider a sidebar after the core control plane is complete.
 

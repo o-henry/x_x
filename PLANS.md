@@ -11,7 +11,11 @@ while preserving vanilla Kaku's feel.
 
 ## Progress
 
-- [ ] Phase 0: audit extension points and finalize file-level design
+- [x] Phase 0: audit extension points and finalize file-level design
+  Shipped outcome:
+  extension points were mapped, file-level ownership was documented, and the
+  repo-local spec/agent/skill scaffolding needed for the implementation phases
+  was established before Phase 1 work began
 - [x] Phase 1: notification store + unread semantics + CLI + visual markers
   Phase 1 CLI contract:
   `notify`, `list-notifications`, `clear-notifications`, `mark-read`, `mark-unread`,
@@ -57,10 +61,20 @@ while preserving vanilla Kaku's feel.
   failing-pane survivability verified against a live GUI session, baseline pane
   management commands preserved, and `respawn-pane` rechecked successfully against
   a freshly rebuilt live runtime
-  Residual limitation:
-  broader live desktop coverage still centers on the default workspace path; Task
-  Center overlay interaction and wider multi-window/workspace behavior continue to
-  rely on targeted automated coverage plus existing Kaku behavior
+  Residual scope note:
+  live desktop verification now includes Task Center additivity, but broader
+  multi-window and multi-workspace coverage still leans on the targeted
+  compatibility suite plus preserved baseline Kaku behavior
+- [x] Phase 6: operator UI surfaces for mouse/keyboard-first control-plane use
+  Shipped outcome:
+  Task Center as the primary operator surface, compact tabbar discovery
+  affordances, visible row actions, mouse+keyboard parity, and
+  prompt/confirm metadata editing that stay additive to Kaku instead of
+  introducing a dashboard shell
+  Residual scope note:
+  the targeted `kaku-gui` closeout suite is green, but the 2026-03-27
+  closeout reattempt did not produce a fresh responsive GUI socket for a new
+  live desktop pass, so that gap remains documented in the phase limitations
 
 ## Non-Goals
 
