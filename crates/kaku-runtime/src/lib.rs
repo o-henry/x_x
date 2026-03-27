@@ -88,3 +88,16 @@ pub fn build_initial_mux(
     let domain: Arc<dyn Domain> = Arc::new(LocalDomain::new("local")?);
     setup_mux(domain, config, default_domain_name, default_workspace_name)
 }
+
+pub fn bootstrap_gui_runtime(
+    window_class: &str,
+    default_domain_name: Option<&str>,
+    default_workspace_name: Option<&str>,
+    should_publish: bool,
+) -> anyhow::Result<Arc<Mux>> {
+    let config = config::configuration();
+    let mux = build_initial_mux(&config, default_domain_name, default_workspace_name)?;
+    let unix_socket_path = prepare_gui_runtime_env()?;
+    spawn_mux_server(unix_socket_path, should_publish, window_class)?;
+    Ok(mux)
+}

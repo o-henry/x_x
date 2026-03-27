@@ -1,7 +1,15 @@
 use adw::prelude::*;
 use gtk::gdk;
+use kaku_runtime::bootstrap_gui_runtime;
+use wezterm_gui_subcommands::DEFAULT_WINDOW_CLASS;
 
 const APP_ID: &str = "dev.tw93.kaku.NativeShell";
+
+struct RuntimeBootState {
+    title: String,
+    status_chip: String,
+    main_copy: String,
+}
 
 fn main() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();
@@ -11,6 +19,7 @@ fn main() -> glib::ExitCode {
 }
 
 fn build_ui(app: &adw::Application) {
+    let runtime = bootstrap_runtime_state();
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title("Kaku Native Shell")
@@ -20,13 +29,30 @@ fn build_ui(app: &adw::Application) {
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.add_css_class("native-shell-root");
-    root.append(&build_top_chrome());
-    root.append(&build_content());
+    root.append(&build_top_chrome(&runtime));
+    root.append(&build_content(&runtime));
     window.set_content(Some(&root));
     window.present();
 }
 
-fn build_top_chrome() -> gtk::Box {
+fn bootstrap_runtime_state() -> RuntimeBootState {
+    match bootstrap_gui_runtime(DEFAULT_WINDOW_CLASS, None, Some("default"), true) {
+        Ok(_) => RuntimeBootState {
+            title: "default workspace".to_string(),
+            status_chip: "runtime online".to_string(),
+            main_copy: "The native shell booted the Kaku mux runtime directly. Next we wire live workspace, notification, and task snapshots into this layout.".to_string(),
+        },
+        Err(err) => RuntimeBootState {
+            title: "runtime bootstrap failed".to_string(),
+            status_chip: "runtime error".to_string(),
+            main_copy: format!(
+                "The native shell window loaded, but Kaku runtime bootstrap failed:\n\n{err:#}"
+            ),
+        },
+    }
+}
+
+fn build_top_chrome(runtime: &RuntimeBootState) -> gtk::Box {
     let chrome = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     chrome.add_css_class("native-shell-chrome");
 
@@ -35,7 +61,7 @@ fn build_top_chrome() -> gtk::Box {
     eyebrow.add_css_class("native-shell-eyebrow");
     eyebrow.set_xalign(0.0);
 
-    let title = gtk::Label::new(Some("default workspace"));
+    let title = gtk::Label::new(Some(&runtime.title));
     title.add_css_class("native-shell-title");
     title.set_xalign(0.0);
 
@@ -45,7 +71,7 @@ fn build_top_chrome() -> gtk::Box {
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
 
-    let status_chip = gtk::Label::new(Some("3 running  2 failed  4 inbox"));
+    let status_chip = gtk::Label::new(Some(&runtime.status_chip));
     status_chip.add_css_class("native-shell-status-chip");
 
     chrome.append(&title_stack);
@@ -54,13 +80,13 @@ fn build_top_chrome() -> gtk::Box {
     chrome
 }
 
-fn build_content() -> gtk::Widget {
+fn build_content(runtime: &RuntimeBootState) -> gtk::Widget {
     let rail = build_rail();
 
     let vertical = gtk::Paned::new(gtk::Orientation::Vertical);
     vertical.set_wide_handle(false);
     vertical.set_position(620);
-    vertical.set_start_child(Some(&build_main_row()));
+    vertical.set_start_child(Some(&build_main_row(runtime)));
     vertical.set_end_child(Some(&build_bottom_panel()));
 
     let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -135,16 +161,16 @@ fn nav_row(label: &str, count: Option<&str>, active: bool) -> gtk::ListBoxRow {
     row
 }
 
-fn build_main_row() -> gtk::Paned {
+fn build_main_row(runtime: &RuntimeBootState) -> gtk::Paned {
     let horizontal = gtk::Paned::new(gtk::Orientation::Horizontal);
     horizontal.set_wide_handle(false);
     horizontal.set_position(980);
-    horizontal.set_start_child(Some(&build_main_surface()));
+    horizontal.set_start_child(Some(&build_main_surface(runtime)));
     horizontal.set_end_child(Some(&build_context_panel()));
     horizontal
 }
 
-fn build_main_surface() -> gtk::Widget {
+fn build_main_surface(runtime: &RuntimeBootState) -> gtk::Widget {
     let shell = gtk::Box::new(gtk::Orientation::Vertical, 18);
     shell.add_css_class("native-shell-surface");
     shell.set_hexpand(true);
@@ -180,9 +206,7 @@ fn build_main_surface() -> gtk::Widget {
     canvas.set_hexpand(true);
     canvas.set_vexpand(true);
 
-    let canvas_copy = gtk::Label::new(Some(
-        "Phase 8 starts here: this area will host the primary Kaku workspace surface and terminal bridge.",
-    ));
+    let canvas_copy = gtk::Label::new(Some(&runtime.main_copy));
     canvas_copy.add_css_class("native-shell-canvas-copy");
     canvas_copy.set_wrap(true);
     canvas_copy.set_wrap_mode(gtk::pango::WrapMode::WordChar);

@@ -2939,10 +2939,12 @@ dependencies = [
  "gio",
  "glib",
  "gtk4",
+ "kaku-runtime",
  "libadwaita",
  "log",
  "mux",
  "wezterm-client",
+ "wezterm-gui-subcommands",
 ]
 
 [[package]]
