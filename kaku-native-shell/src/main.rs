@@ -1,27 +1,34 @@
 use adw::prelude::*;
+use glib::ControlFlow;
 use gtk::gdk;
-use kaku_runtime::bootstrap_gui_runtime;
+use gtk::{Align, Orientation, PolicyType};
 use mux::notification_store::NotificationRecord;
 use mux::task_panes::TaskPaneRecord;
 use mux::workspace_state::{WorkspaceLogRecord, WorkspaceProgressRecord, WorkspaceStatusRecord};
 use mux::Mux;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::path::PathBuf;
+use std::process::Command;
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use wezterm_gui_subcommands::DEFAULT_WINDOW_CLASS;
 
-const APP_ID: &str = "dev.tw93.kaku.NativeShell";
+const APP_ID: &str = "fun.tw93.kaku.NativeShell";
+const RAIL_WIDTH: i32 = 176;
+const CHROME_HEIGHT: i32 = 46;
 
-struct RuntimeBootState {
-    title: String,
-    status_chip: String,
-    main_copy: String,
-    workspaces: Vec<WorkspaceSummary>,
-    active_workspace: String,
-    inbox: Vec<String>,
-    failures: Vec<String>,
-    activity: Vec<String>,
+fn main() {
+    let app = adw::Application::builder().application_id(APP_ID).build();
+    app.connect_startup(|_| install_css());
+    app.connect_activate(|app| {
+        let controller = AppController::new(app);
+        controller.bootstrap();
+        controller.window.present();
+    });
+    app.run();
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 struct WorkspaceSummary {
     name: String,
     unread_count: usize,
@@ -29,642 +36,945 @@ struct WorkspaceSummary {
     failed_count: usize,
     status: Option<String>,
     progress: Option<u8>,
+    log_count: usize,
 }
 
-fn main() -> glib::ExitCode {
-    let app = adw::Application::builder().application_id(APP_ID).build();
-    app.connect_startup(|_| install_css());
-    app.connect_activate(build_ui);
-    app.run()
+#[derive(Clone, Debug, Default)]
+struct RuntimeSnapshot {
+    active_workspace: String,
+    workspaces: Vec<WorkspaceSummary>,
+    notifications: Vec<NotificationRecord>,
+    task_panes: Vec<TaskPaneRecord>,
+    statuses: Vec<WorkspaceStatusRecord>,
+    progresses: Vec<WorkspaceProgressRecord>,
+    logs: Vec<WorkspaceLogRecord>,
 }
 
-fn build_ui(app: &adw::Application) {
-    let runtime = bootstrap_runtime_state();
-    let window = adw::ApplicationWindow::builder()
-        .application(app)
-        .title("Kaku Native Shell")
-        .default_width(1480)
-        .default_height(920)
-        .build();
-
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    root.add_css_class("native-shell-root");
-    root.append(&build_top_chrome(&runtime));
-    root.append(&build_content(&runtime));
-    window.set_content(Some(&root));
-    window.present();
+struct AppController {
+    window: adw::ApplicationWindow,
+    selected_workspace: RefCell<Option<String>>,
+    runtime_error: RefCell<Option<String>>,
+    runtime_online: Cell<bool>,
 }
 
-fn bootstrap_runtime_state() -> RuntimeBootState {
-    match bootstrap_gui_runtime(DEFAULT_WINDOW_CLASS, None, Some("default"), true) {
-        Ok(mux) => runtime_boot_state_from_mux(&mux),
-        Err(err) => RuntimeBootState {
-            title: "runtime bootstrap failed".to_string(),
-            status_chip: "runtime error".to_string(),
-            main_copy: format!(
-                "The native shell window loaded, but Kaku runtime bootstrap failed:\n\n{err:#}"
-            ),
-            workspaces: vec![],
-            active_workspace: "default".to_string(),
-            inbox: vec![],
-            failures: vec![],
-            activity: vec![],
-        },
-    }
-}
+impl AppController {
+    fn new(app: &adw::Application) -> Rc<Self> {
+        let window = adw::ApplicationWindow::builder()
+            .application(app)
+            .title("Kaku Native Shell")
+            .default_width(1480)
+            .default_height(920)
+            .build();
+        window.add_css_class("native-shell-window");
 
-fn runtime_boot_state_from_mux(mux: &Mux) -> RuntimeBootState {
-    let active_workspace = mux.active_workspace();
-    let workspaces = mux.iter_workspaces();
-    let statuses = mux
-        .list_workspace_status()
-        .into_iter()
-        .map(|record| (record.workspace.clone(), record))
-        .collect::<HashMap<_, _>>();
-    let progresses = mux
-        .list_workspace_progress()
-        .into_iter()
-        .map(|record| (record.workspace.clone(), record))
-        .collect::<HashMap<_, _>>();
-    let notifications = mux.list_notifications();
-    let task_panes = mux.list_task_panes();
-    let logs = mux.list_workspace_log(&active_workspace);
-
-    let workspace_summaries = build_workspace_summaries(
-        &workspaces,
-        &statuses,
-        &progresses,
-        &notifications,
-        &task_panes,
-    );
-
-    let unread_total = notifications.iter().filter(|record| record.unread).count();
-    let running_total = task_panes.iter().filter(|record| !record.is_dead).count();
-    let failed_total = task_panes.iter().filter(|record| record.is_failed).count();
-
-    RuntimeBootState {
-        title: format!("{active_workspace} workspace"),
-        status_chip: format!(
-            "{running_total} running  {failed_total} failed  {unread_total} inbox"
-        ),
-        main_copy: active_workspace_summary_copy(
-            &active_workspace,
-            statuses.get(&active_workspace),
-            progresses.get(&active_workspace),
-            &task_panes,
-            &notifications,
-        ),
-        workspaces: workspace_summaries,
-        active_workspace,
-        inbox: notifications
-            .iter()
-            .filter(|record| record.unread)
-            .take(4)
-            .map(format_notification_row)
-            .collect(),
-        failures: task_panes
-            .iter()
-            .filter(|record| record.is_failed || !record.is_dead)
-            .take(4)
-            .map(format_task_row)
-            .collect(),
-        activity: logs.into_iter().rev().take(5).map(format_log_row).collect(),
-    }
-}
-
-fn build_workspace_summaries(
-    workspaces: &[String],
-    statuses: &HashMap<String, WorkspaceStatusRecord>,
-    progresses: &HashMap<String, WorkspaceProgressRecord>,
-    notifications: &[NotificationRecord],
-    task_panes: &[TaskPaneRecord],
-) -> Vec<WorkspaceSummary> {
-    let mut summaries = workspaces
-        .iter()
-        .map(|name| WorkspaceSummary {
-            name: name.clone(),
-            unread_count: notifications
-                .iter()
-                .filter(|record| record.workspace == *name && record.unread)
-                .count(),
-            running_count: task_panes
-                .iter()
-                .filter(|record| {
-                    record.workspace.as_deref() == Some(name.as_str()) && !record.is_dead
-                })
-                .count(),
-            failed_count: task_panes
-                .iter()
-                .filter(|record| {
-                    record.workspace.as_deref() == Some(name.as_str()) && record.is_failed
-                })
-                .count(),
-            status: statuses.get(name).map(|record| record.status.clone()),
-            progress: progresses.get(name).map(|record| record.value),
+        Rc::new(Self {
+            window,
+            selected_workspace: RefCell::new(None),
+            runtime_error: RefCell::new(None),
+            runtime_online: Cell::new(false),
         })
-        .collect::<Vec<_>>();
-    summaries.sort_by(|left, right| left.name.cmp(&right.name));
-    summaries
+    }
+
+    fn bootstrap(self: &Rc<Self>) {
+        match kaku_runtime::bootstrap_gui_runtime(DEFAULT_WINDOW_CLASS, None, Some("default"), true)
+        {
+            Ok(mux) => {
+                self.runtime_online.set(true);
+                let default_workspace = mux.active_workspace();
+                self.selected_workspace.replace(Some(default_workspace));
+                self.runtime_error.replace(None);
+            }
+            Err(err) => {
+                self.runtime_online.set(false);
+                self.runtime_error
+                    .replace(Some(format!("runtime bootstrap failed: {err:#}")));
+            }
+        }
+
+        self.rerender();
+
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_seconds_local(2, move || {
+            if let Some(controller) = weak.upgrade() {
+                controller.rerender();
+                ControlFlow::Continue
+            } else {
+                ControlFlow::Break
+            }
+        });
+    }
+
+    fn rerender(self: &Rc<Self>) {
+        let snapshot = self.snapshot();
+        let root = self.build_shell(snapshot);
+        self.window.set_content(Some(&root));
+    }
+
+    fn snapshot(&self) -> RuntimeSnapshot {
+        if !self.runtime_online.get() {
+            return RuntimeSnapshot::default();
+        }
+
+        let mux = Mux::get();
+        let notifications = mux.list_notifications();
+        let task_panes = mux.list_task_panes();
+        let statuses = mux.list_workspace_status();
+        let progresses = mux.list_workspace_progress();
+
+        let mut names = mux.iter_workspaces();
+        if names.is_empty() {
+            names.push(mux.active_workspace());
+        }
+        names.sort();
+        names.dedup();
+
+        let active_workspace = {
+            let selected = self.selected_workspace.borrow().clone();
+            match selected {
+                Some(selected) if names.iter().any(|name| name == &selected) => selected,
+                _ => names
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "default".to_string()),
+            }
+        };
+
+        let logs = mux.list_workspace_log(&active_workspace);
+
+        let workspaces = names
+            .iter()
+            .map(|name| WorkspaceSummary {
+                name: name.clone(),
+                unread_count: notifications
+                    .iter()
+                    .filter(|record| record.workspace == *name && record.unread)
+                    .count(),
+                running_count: task_panes
+                    .iter()
+                    .filter(|record| {
+                        record.workspace.as_deref() == Some(name.as_str()) && !record.is_dead
+                    })
+                    .count(),
+                failed_count: task_panes
+                    .iter()
+                    .filter(|record| {
+                        record.workspace.as_deref() == Some(name.as_str()) && record.is_failed
+                    })
+                    .count(),
+                status: statuses
+                    .iter()
+                    .find(|record| record.workspace == *name)
+                    .map(|record| record.status.clone()),
+                progress: progresses
+                    .iter()
+                    .find(|record| record.workspace == *name)
+                    .map(|record| record.value),
+                log_count: if name == &active_workspace {
+                    logs.len()
+                } else {
+                    mux.list_workspace_log(name).len()
+                },
+            })
+            .collect::<Vec<_>>();
+
+        RuntimeSnapshot {
+            active_workspace,
+            workspaces,
+            notifications,
+            task_panes,
+            statuses,
+            progresses,
+            logs,
+        }
+    }
+
+    fn build_shell(self: &Rc<Self>, snapshot: RuntimeSnapshot) -> gtk::Box {
+        let root = gtk::Box::new(Orientation::Vertical, 0);
+        root.add_css_class("shell-root");
+
+        let chrome = self.build_chrome(&snapshot);
+        chrome.set_height_request(CHROME_HEIGHT);
+        root.append(&chrome);
+
+        let body = gtk::Box::new(Orientation::Horizontal, 0);
+        body.set_vexpand(true);
+        body.add_css_class("shell-body");
+
+        let rail = self.build_rail(&snapshot);
+        rail.set_width_request(RAIL_WIDTH);
+        body.append(&rail);
+
+        let main_area = self.build_main_area(&snapshot);
+        body.append(&main_area);
+
+        root.append(&body);
+        root
+    }
+
+    fn build_chrome(self: &Rc<Self>, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let chrome = gtk::Box::new(Orientation::Horizontal, 12);
+        chrome.add_css_class("shell-chrome");
+        chrome.set_margin_start(14);
+        chrome.set_margin_end(16);
+        chrome.set_margin_top(10);
+        chrome.set_margin_bottom(8);
+
+        let title_box = gtk::Box::new(Orientation::Vertical, 2);
+        let title = gtk::Label::new(Some("Kaku Native Shell"));
+        title.set_halign(Align::Start);
+        title.add_css_class("chrome-title");
+        let subtitle = gtk::Label::new(Some(&format!(
+            "{} workspaces  {} unread  {} tasks",
+            snapshot.workspaces.len(),
+            snapshot
+                .notifications
+                .iter()
+                .filter(|row| row.unread)
+                .count(),
+            snapshot.task_panes.len()
+        )));
+        subtitle.set_halign(Align::Start);
+        subtitle.add_css_class("chrome-subtitle");
+        title_box.append(&title);
+        title_box.append(&subtitle);
+
+        let spacer = gtk::Box::new(Orientation::Horizontal, 0);
+        spacer.set_hexpand(true);
+
+        let active = gtk::Label::new(Some(&format!("active: {}", snapshot.active_workspace)));
+        active.add_css_class("chrome-pill");
+        let refresh = action_button("Refresh");
+        {
+            let this = Rc::clone(self);
+            refresh.connect_clicked(move |_| this.rerender());
+        }
+        let terminal = action_button("Launch Terminal");
+        {
+            let this = Rc::clone(self);
+            terminal.connect_clicked(move |_| this.launch_terminal_window());
+        }
+
+        chrome.append(&title_box);
+        chrome.append(&spacer);
+        chrome.append(&active);
+        chrome.append(&refresh);
+        chrome.append(&terminal);
+        chrome
+    }
+
+    fn build_rail(self: &Rc<Self>, snapshot: &RuntimeSnapshot) -> gtk::ScrolledWindow {
+        let rail = gtk::Box::new(Orientation::Vertical, 6);
+        rail.add_css_class("workspace-rail");
+        rail.set_margin_start(12);
+        rail.set_margin_end(10);
+        rail.set_margin_top(16);
+        rail.set_margin_bottom(16);
+
+        let eyebrow = gtk::Label::new(Some("WORKSPACES"));
+        eyebrow.set_halign(Align::Start);
+        eyebrow.add_css_class("rail-eyebrow");
+        rail.append(&eyebrow);
+
+        for summary in &snapshot.workspaces {
+            let row = gtk::Button::new();
+            row.set_halign(Align::Fill);
+            row.set_hexpand(true);
+            row.add_css_class("rail-row");
+            if summary.name == snapshot.active_workspace {
+                row.add_css_class("active");
+            }
+
+            let outer = gtk::Box::new(Orientation::Horizontal, 8);
+            outer.set_hexpand(true);
+            let name_box = gtk::Box::new(Orientation::Vertical, 2);
+            name_box.set_hexpand(true);
+
+            let name = gtk::Label::new(Some(&summary.name));
+            name.set_halign(Align::Start);
+            name.add_css_class("rail-name");
+            let meta = gtk::Label::new(Some(&format!(
+                "{} unread  {} run  {} fail",
+                summary.unread_count, summary.running_count, summary.failed_count
+            )));
+            meta.set_halign(Align::Start);
+            meta.add_css_class("rail-meta");
+            name_box.append(&name);
+            name_box.append(&meta);
+
+            let mut status_bits = Vec::new();
+            if let Some(status) = &summary.status {
+                status_bits.push(status.clone());
+            }
+            if let Some(progress) = summary.progress {
+                status_bits.push(format!("{progress}%"));
+            }
+            if summary.log_count > 0 {
+                status_bits.push(format!("{} logs", summary.log_count));
+            }
+
+            let trailing_text = if status_bits.is_empty() {
+                String::new()
+            } else {
+                status_bits.join(" · ")
+            };
+            let trailing = gtk::Label::new(Some(&trailing_text));
+            trailing.set_halign(Align::End);
+            trailing.add_css_class("rail-trailing");
+
+            outer.append(&name_box);
+            outer.append(&trailing);
+            row.set_child(Some(&outer));
+
+            let this = Rc::clone(self);
+            let workspace = summary.name.clone();
+            row.connect_clicked(move |_| this.select_workspace(&workspace));
+            rail.append(&row);
+        }
+
+        let scroller = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(PolicyType::Never)
+            .vscrollbar_policy(PolicyType::Automatic)
+            .child(&rail)
+            .build();
+        scroller.add_css_class("rail-scroll");
+        scroller
+    }
+
+    fn build_main_area(self: &Rc<Self>, snapshot: &RuntimeSnapshot) -> gtk::Paned {
+        let center_column = gtk::Paned::new(Orientation::Vertical);
+        center_column.set_position(430);
+
+        let side_column = gtk::Paned::new(Orientation::Vertical);
+        side_column.set_position(320);
+
+        let outer = gtk::Paned::new(Orientation::Horizontal);
+        outer.set_position(910);
+
+        let top_center = self.build_primary_workspace_panel(&snapshot);
+        let lower_center = gtk::Paned::new(Orientation::Horizontal);
+        lower_center.set_position(560);
+        lower_center.set_start_child(Some(&self.build_activity_panel(&snapshot)));
+        lower_center.set_end_child(Some(&self.build_metadata_panel(&snapshot)));
+
+        center_column.set_start_child(Some(&top_center));
+        center_column.set_end_child(Some(&lower_center));
+
+        side_column.set_start_child(Some(&self.build_inbox_panel(&snapshot)));
+        side_column.set_end_child(Some(&self.build_task_panel(&snapshot)));
+
+        outer.set_start_child(Some(&center_column));
+        outer.set_end_child(Some(&side_column));
+        outer
+    }
+
+    fn build_primary_workspace_panel(self: &Rc<Self>, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let workspace = self.current_workspace_summary(snapshot);
+        let panel = pane_panel("Workspace", Some("Active Kaku workspace state"));
+        let body = gtk::Box::new(Orientation::Vertical, 14);
+        body.add_css_class("pane-body");
+        body.set_margin_start(18);
+        body.set_margin_end(18);
+        body.set_margin_top(18);
+        body.set_margin_bottom(18);
+
+        let title = gtk::Label::new(Some(&workspace.name));
+        title.set_halign(Align::Start);
+        title.add_css_class("workspace-title");
+
+        let summary = gtk::Label::new(Some(&format!(
+            "{} unread  {} running  {} failed  {} logs",
+            workspace.unread_count,
+            workspace.running_count,
+            workspace.failed_count,
+            workspace.log_count
+        )));
+        summary.set_halign(Align::Start);
+        summary.add_css_class("workspace-summary");
+
+        let state_row = gtk::Box::new(Orientation::Horizontal, 10);
+        state_row.set_halign(Align::Start);
+        if let Some(status) = &workspace.status {
+            state_row.append(&pill(&format!("status {}", status)));
+        } else {
+            state_row.append(&pill("status unset"));
+        }
+        if let Some(progress) = workspace.progress {
+            state_row.append(&pill(&format!("progress {}%", progress)));
+        } else {
+            state_row.append(&pill("progress unset"));
+        }
+
+        let actions = gtk::Box::new(Orientation::Horizontal, 8);
+        actions.set_halign(Align::Start);
+        let launch = action_button("Launch Terminal");
+        {
+            let this = Rc::clone(self);
+            launch.connect_clicked(move |_| this.launch_terminal_window());
+        }
+        let set_status = action_button("Set Status");
+        {
+            let this = Rc::clone(self);
+            set_status.connect_clicked(move |_| this.set_status_for_selected());
+        }
+        let clear_status = action_button("Clear Status");
+        {
+            let this = Rc::clone(self);
+            clear_status.connect_clicked(move |_| this.clear_status_for_selected());
+        }
+        let set_progress = action_button("Set Progress");
+        {
+            let this = Rc::clone(self);
+            set_progress.connect_clicked(move |_| this.set_progress_for_selected());
+        }
+        let clear_progress = action_button("Clear Progress");
+        {
+            let this = Rc::clone(self);
+            clear_progress.connect_clicked(move |_| this.clear_progress_for_selected());
+        }
+        let append_log = action_button("Append Log");
+        {
+            let this = Rc::clone(self);
+            append_log.connect_clicked(move |_| this.append_log_for_selected());
+        }
+        actions.append(&launch);
+        actions.append(&set_status);
+        actions.append(&clear_status);
+        actions.append(&set_progress);
+        actions.append(&clear_progress);
+        actions.append(&append_log);
+
+        let hint = gtk::Label::new(Some(
+            "Use the left rail to switch workspaces. Buttons above mutate real mux-backed state and refresh the surrounding panes immediately.",
+        ));
+        hint.set_wrap(true);
+        hint.set_halign(Align::Start);
+        hint.add_css_class("workspace-hint");
+
+        body.append(&title);
+        body.append(&summary);
+        body.append(&state_row);
+        body.append(&actions);
+        body.append(&hint);
+        panel.append(&body);
+        panel
+    }
+
+    fn build_inbox_panel(self: &Rc<Self>, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let panel = pane_panel("Inbox", Some("Unread notifications"));
+        let selected = snapshot.active_workspace.as_str();
+        let unread = snapshot
+            .notifications
+            .iter()
+            .filter(|row| row.workspace == selected && row.unread)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let header_actions = gtk::Box::new(Orientation::Horizontal, 8);
+        header_actions.set_margin_start(14);
+        header_actions.set_margin_end(14);
+        header_actions.set_margin_top(12);
+        let mark_read = action_button("Mark Visible Read");
+        {
+            let this = Rc::clone(self);
+            mark_read.connect_clicked(move |_| this.mark_notifications_read_for_selected());
+        }
+        header_actions.append(&mark_read);
+        panel.append(&header_actions);
+
+        if unread.is_empty() {
+            panel.append(&empty_state("No unread notifications in this workspace."));
+            return panel;
+        }
+
+        let list = gtk::Box::new(Orientation::Vertical, 8);
+        list.set_margin_start(14);
+        list.set_margin_end(14);
+        list.set_margin_top(6);
+        list.set_margin_bottom(14);
+        for row in unread.iter().take(8) {
+            list.append(&notification_row(row));
+        }
+        let scroller = scroller(&list);
+        panel.append(&scroller);
+        panel
+    }
+
+    fn build_task_panel(&self, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let panel = pane_panel("Tasks", Some("Running and failed task panes"));
+        let selected = snapshot.active_workspace.as_str();
+        let tasks = snapshot
+            .task_panes
+            .iter()
+            .filter(|row| row.workspace.as_deref() == Some(selected))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if tasks.is_empty() {
+            panel.append(&empty_state("No task panes recorded for this workspace."));
+            return panel;
+        }
+
+        let list = gtk::Box::new(Orientation::Vertical, 8);
+        list.set_margin_start(14);
+        list.set_margin_end(14);
+        list.set_margin_top(12);
+        list.set_margin_bottom(14);
+        for row in tasks.iter().take(10) {
+            list.append(&task_row(row));
+        }
+        panel.append(&scroller(&list));
+        panel
+    }
+
+    fn build_activity_panel(&self, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let panel = pane_panel("Activity", Some("Recent workspace log"));
+        if snapshot.logs.is_empty() {
+            panel.append(&empty_state("No workspace log entries yet."));
+            return panel;
+        }
+
+        let list = gtk::Box::new(Orientation::Vertical, 8);
+        list.set_margin_start(14);
+        list.set_margin_end(14);
+        list.set_margin_top(12);
+        list.set_margin_bottom(14);
+        for row in snapshot.logs.iter().rev().take(12) {
+            list.append(&log_row(row));
+        }
+        panel.append(&scroller(&list));
+        panel
+    }
+
+    fn build_metadata_panel(&self, snapshot: &RuntimeSnapshot) -> gtk::Box {
+        let panel = pane_panel("Metadata", Some("Selected workspace control-plane state"));
+        let selected = snapshot.active_workspace.as_str();
+        let status = snapshot
+            .statuses
+            .iter()
+            .find(|row| row.workspace == selected)
+            .map(|row| row.status.clone());
+        let progress = snapshot
+            .progresses
+            .iter()
+            .find(|row| row.workspace == selected)
+            .map(|row| row.value);
+
+        let body = gtk::Box::new(Orientation::Vertical, 10);
+        body.set_margin_start(14);
+        body.set_margin_end(14);
+        body.set_margin_top(12);
+        body.set_margin_bottom(14);
+
+        body.append(&info_row("Workspace", selected));
+        body.append(&info_row("Status", status.as_deref().unwrap_or("unset")));
+        body.append(&info_row(
+            "Progress",
+            &progress
+                .map(|value| format!("{value}%"))
+                .unwrap_or_else(|| "unset".to_string()),
+        ));
+        body.append(&info_row(
+            "Unread",
+            &snapshot
+                .notifications
+                .iter()
+                .filter(|row| row.workspace == selected && row.unread)
+                .count()
+                .to_string(),
+        ));
+        body.append(&info_row(
+            "Tasks",
+            &snapshot
+                .task_panes
+                .iter()
+                .filter(|row| row.workspace.as_deref() == Some(selected))
+                .count()
+                .to_string(),
+        ));
+        panel.append(&body);
+        panel
+    }
+
+    fn current_workspace_summary<'a>(&self, snapshot: &'a RuntimeSnapshot) -> &'a WorkspaceSummary {
+        snapshot
+            .workspaces
+            .iter()
+            .find(|summary| summary.name == snapshot.active_workspace)
+            .or_else(|| snapshot.workspaces.first())
+            .expect("at least one workspace summary")
+    }
+
+    fn select_workspace(self: &Rc<Self>, workspace: &str) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let mux = Mux::get();
+        mux.set_active_workspace(workspace);
+        self.selected_workspace.replace(Some(workspace.to_string()));
+        self.rerender();
+    }
+
+    fn set_status_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        let mux = Mux::get();
+        let next = match mux.workspace_status_for_workspace(&workspace) {
+            Some(record) if record.status == "Planning" => "Building",
+            Some(record) if record.status == "Building" => "Reviewing",
+            Some(record) if record.status == "Reviewing" => "Blocked",
+            _ => "Planning",
+        };
+        mux.set_workspace_status(&workspace, next);
+        self.rerender();
+    }
+
+    fn clear_status_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        Mux::get().clear_workspace_status(&workspace);
+        self.rerender();
+    }
+
+    fn set_progress_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        let mux = Mux::get();
+        let current = mux
+            .workspace_progress_for_workspace(&workspace)
+            .map(|record| record.value)
+            .unwrap_or(0);
+        let next = match current {
+            0..=24 => 35,
+            25..=64 => 70,
+            65..=99 => 100,
+            _ => 15,
+        };
+        let _ = mux.set_workspace_progress(&workspace, next);
+        self.rerender();
+    }
+
+    fn clear_progress_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        Mux::get().clear_workspace_progress(&workspace);
+        self.rerender();
+    }
+
+    fn append_log_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let message = format!("native-shell check-in {secs}");
+        Mux::get().append_workspace_log(&workspace, &message);
+        self.rerender();
+    }
+
+    fn mark_notifications_read_for_selected(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let workspace = self.selected_workspace_name();
+        let ids = Mux::get()
+            .list_notifications()
+            .into_iter()
+            .filter(|row| row.workspace == workspace && row.unread)
+            .map(|row| row.notification_id)
+            .collect::<Vec<_>>();
+        if !ids.is_empty() {
+            Mux::get().mark_notifications_read(&ids);
+        }
+        self.rerender();
+    }
+
+    fn launch_terminal_window(self: &Rc<Self>) {
+        let Some(path) = sibling_binary("kaku-gui") else {
+            self.runtime_error
+                .replace(Some("unable to locate sibling kaku-gui binary".to_string()));
+            self.rerender();
+            return;
+        };
+
+        match Command::new(path)
+            .arg("start")
+            .arg("--always-new-process")
+            .spawn()
+        {
+            Ok(_) => {
+                self.runtime_error.replace(None);
+            }
+            Err(err) => {
+                self.runtime_error
+                    .replace(Some(format!("failed to launch terminal window: {err}")));
+            }
+        }
+        self.rerender();
+    }
+
+    fn selected_workspace_name(&self) -> String {
+        self.selected_workspace
+            .borrow()
+            .clone()
+            .unwrap_or_else(|| "default".to_string())
+    }
 }
 
-fn active_workspace_summary_copy(
-    workspace: &str,
-    status: Option<&WorkspaceStatusRecord>,
-    progress: Option<&WorkspaceProgressRecord>,
-    task_panes: &[TaskPaneRecord],
-    notifications: &[NotificationRecord],
-) -> String {
-    let unread = notifications
-        .iter()
-        .filter(|record| record.workspace == workspace && record.unread)
-        .count();
-    let running = task_panes
-        .iter()
-        .filter(|record| record.workspace.as_deref() == Some(workspace) && !record.is_dead)
-        .count();
-    let failed = task_panes
-        .iter()
-        .filter(|record| record.workspace.as_deref() == Some(workspace) && record.is_failed)
-        .count();
-
-    let mut parts = vec![format!("workspace: {workspace}")];
-    if let Some(status) = status {
-        parts.push(format!("status: {}", status.status));
-    }
-    if let Some(progress) = progress {
-        parts.push(format!("progress: {}%", progress.value));
-    }
-    parts.push(format!("running tasks: {running}"));
-    parts.push(format!("failed tasks: {failed}"));
-    parts.push(format!("unread notifications: {unread}"));
-    parts.join("\n")
+fn action_button(label: &str) -> gtk::Button {
+    let button = gtk::Button::with_label(label);
+    button.add_css_class("action-button");
+    button
 }
 
-fn format_notification_row(record: &NotificationRecord) -> String {
-    let body = record.body.clone().unwrap_or_default();
-    if body.is_empty() {
-        format!("{} · {}", record.workspace, record.title)
-    } else {
-        format!("{} · {} — {}", record.workspace, record.title, body)
+fn pane_panel(title: &str, subtitle: Option<&str>) -> gtk::Box {
+    let panel = gtk::Box::new(Orientation::Vertical, 0);
+    panel.add_css_class("pane-panel");
+
+    let header = gtk::Box::new(Orientation::Vertical, 3);
+    header.add_css_class("pane-header");
+    header.set_margin_start(14);
+    header.set_margin_end(14);
+    header.set_margin_top(12);
+    header.set_margin_bottom(10);
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_halign(Align::Start);
+    title_label.add_css_class("pane-title");
+    header.append(&title_label);
+    if let Some(subtitle) = subtitle {
+        let subtitle_label = gtk::Label::new(Some(subtitle));
+        subtitle_label.set_halign(Align::Start);
+        subtitle_label.add_css_class("pane-subtitle");
+        header.append(&subtitle_label);
     }
+    panel.append(&header);
+    panel
 }
 
-fn format_task_row(record: &TaskPaneRecord) -> String {
-    let workspace = record
-        .workspace
-        .clone()
-        .unwrap_or_else(|| "unknown".to_string());
-    let state = if record.is_failed {
+fn empty_state(message: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(message));
+    label.set_margin_start(14);
+    label.set_margin_end(14);
+    label.set_margin_top(12);
+    label.set_margin_bottom(14);
+    label.set_wrap(true);
+    label.set_halign(Align::Start);
+    label.add_css_class("empty-state");
+    label
+}
+
+fn scroller(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
+    gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(PolicyType::Never)
+        .vscrollbar_policy(PolicyType::Automatic)
+        .child(child)
+        .build()
+}
+
+fn pill(label: &str) -> gtk::Label {
+    let pill = gtk::Label::new(Some(label));
+    pill.add_css_class("chrome-pill");
+    pill
+}
+
+fn notification_row(row: &NotificationRecord) -> gtk::Box {
+    let outer = gtk::Box::new(Orientation::Vertical, 4);
+    outer.add_css_class("list-row");
+
+    let title = gtk::Label::new(Some(&row.title));
+    title.set_halign(Align::Start);
+    title.add_css_class("row-title");
+    let detail = gtk::Label::new(Some(&format!(
+        "{} · {}",
+        row.kind,
+        row.body.as_deref().unwrap_or("no body")
+    )));
+    detail.set_halign(Align::Start);
+    detail.set_wrap(true);
+    detail.add_css_class("row-detail");
+    outer.append(&title);
+    outer.append(&detail);
+    outer
+}
+
+fn task_row(row: &TaskPaneRecord) -> gtk::Box {
+    let outer = gtk::Box::new(Orientation::Vertical, 4);
+    outer.add_css_class("list-row");
+    let title = gtk::Label::new(Some(&format!("pane {}", row.pane_id)));
+    title.set_halign(Align::Start);
+    title.add_css_class("row-title");
+    let status = if row.is_failed {
         "failed"
-    } else if record.is_dead {
-        "idle"
+    } else if row.is_dead {
+        "dead"
     } else {
         "running"
     };
-    format!("{workspace} · pane {} · {}", record.pane_id, state)
-}
-
-fn format_log_row(record: WorkspaceLogRecord) -> String {
-    format!("#{} {}", record.seq, record.message)
-}
-
-fn build_top_chrome(runtime: &RuntimeBootState) -> gtk::Box {
-    let chrome = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    chrome.add_css_class("native-shell-chrome");
-
-    let title_stack = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let eyebrow = gtk::Label::new(Some("KAKU"));
-    eyebrow.add_css_class("native-shell-eyebrow");
-    eyebrow.set_xalign(0.0);
-
-    let title = gtk::Label::new(Some(&runtime.title));
-    title.add_css_class("native-shell-title");
-    title.set_xalign(0.0);
-
-    title_stack.append(&eyebrow);
-    title_stack.append(&title);
-
-    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
-
-    let status_chip = gtk::Label::new(Some(&runtime.status_chip));
-    status_chip.add_css_class("native-shell-status-chip");
-
-    chrome.append(&title_stack);
-    chrome.append(&spacer);
-    chrome.append(&status_chip);
-    chrome
-}
-
-fn build_content(runtime: &RuntimeBootState) -> gtk::Widget {
-    let rail = build_rail(runtime);
-
-    let workspace_shell = build_workspace_shell(runtime);
-
-    let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    body.add_css_class("native-shell-body");
-    body.append(&rail);
-    body.append(&workspace_shell);
-    body.upcast()
-}
-
-fn build_rail(runtime: &RuntimeBootState) -> gtk::Box {
-    let rail = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    rail.add_css_class("native-shell-rail");
-
-    let workspace_header = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let title = gtk::Label::new(Some("KAKU"));
-    title.add_css_class("native-shell-rail-title");
-    title.set_xalign(0.0);
-
-    let subtitle = gtk::Label::new(Some("WORKSPACES"));
-    subtitle.add_css_class("native-shell-rail-subtitle");
-    subtitle.set_xalign(0.0);
-
-    workspace_header.append(&title);
-    workspace_header.append(&subtitle);
-
-    let nav = gtk::ListBox::new();
-    nav.add_css_class("native-shell-nav");
-    nav.set_selection_mode(gtk::SelectionMode::Single);
-    for workspace in &runtime.workspaces {
-        let mut badge_parts = vec![];
-        if workspace.unread_count > 0 {
-            badge_parts.push(format!("i{}", workspace.unread_count));
-        }
-        if workspace.running_count > 0 {
-            badge_parts.push(format!("r{}", workspace.running_count));
-        }
-        if workspace.failed_count > 0 {
-            badge_parts.push(format!("f{}", workspace.failed_count));
-        }
-        let badge = if badge_parts.is_empty() {
-            None
-        } else {
-            Some(badge_parts.join(" "))
-        };
-        nav.append(&nav_row(
-            &workspace.name,
-            badge.as_deref(),
-            workspace.name == runtime.active_workspace,
-        ));
+    let detail = gtk::Label::new(Some(&format!(
+        "{} · remain:{} · silent:{}",
+        status, row.remain_on_exit, row.silenced
+    )));
+    detail.set_halign(Align::Start);
+    detail.add_css_class("row-detail");
+    outer.append(&title);
+    outer.append(&detail);
+    if let Some(cwd) = &row.current_working_dir {
+        let cwd_label = gtk::Label::new(Some(cwd));
+        cwd_label.set_halign(Align::Start);
+        cwd_label.add_css_class("row-detail");
+        outer.append(&cwd_label);
     }
-
-    let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    spacer.set_vexpand(true);
-
-    rail.append(&workspace_header);
-    rail.append(&nav);
-    rail.append(&spacer);
-    rail
+    outer
 }
 
-fn nav_row(label: &str, count: Option<&str>, active: bool) -> gtk::ListBoxRow {
-    let row = gtk::ListBoxRow::new();
-    row.add_css_class("native-shell-nav-row");
-    if active {
-        row.add_css_class("is-active");
-    }
+fn log_row(row: &WorkspaceLogRecord) -> gtk::Box {
+    let outer = gtk::Box::new(Orientation::Vertical, 4);
+    outer.add_css_class("list-row");
+    let title = gtk::Label::new(Some(&format!("log #{}", row.seq)));
+    title.set_halign(Align::Start);
+    title.add_css_class("row-title");
+    let detail = gtk::Label::new(Some(&row.message));
+    detail.set_halign(Align::Start);
+    detail.set_wrap(true);
+    detail.add_css_class("row-detail");
+    outer.append(&title);
+    outer.append(&detail);
+    outer
+}
 
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    content.add_css_class("native-shell-nav-row-content");
-
-    let dot = gtk::Label::new(Some(if active { "◆" } else { "•" }));
-    dot.add_css_class("native-shell-nav-dot");
-
-    let text = gtk::Label::new(Some(label));
-    text.add_css_class("native-shell-nav-label");
-    text.set_xalign(0.0);
-    text.set_hexpand(true);
-
-    content.append(&dot);
-    content.append(&text);
-    if let Some(count) = count {
-        let badge = gtk::Label::new(Some(count));
-        badge.add_css_class("native-shell-nav-badge");
-        content.append(&badge);
-    }
-
-    row.set_child(Some(&content));
+fn info_row(label: &str, value: &str) -> gtk::Box {
+    let row = gtk::Box::new(Orientation::Vertical, 3);
+    row.add_css_class("info-row");
+    let label_widget = gtk::Label::new(Some(label));
+    label_widget.set_halign(Align::Start);
+    label_widget.add_css_class("info-label");
+    let value_widget = gtk::Label::new(Some(value));
+    value_widget.set_halign(Align::Start);
+    value_widget.add_css_class("info-value");
+    row.append(&label_widget);
+    row.append(&value_widget);
     row
 }
 
-fn build_workspace_shell(runtime: &RuntimeBootState) -> gtk::Widget {
-    let shell = gtk::Paned::new(gtk::Orientation::Horizontal);
-    shell.set_wide_handle(false);
-    shell.set_position(930);
-    shell.set_start_child(Some(&build_primary_column(runtime)));
-    shell.set_end_child(Some(&build_secondary_column(runtime)));
-    shell.upcast()
-}
-
-fn build_primary_column(runtime: &RuntimeBootState) -> gtk::Widget {
-    let column = gtk::Paned::new(gtk::Orientation::Vertical);
-    column.set_wide_handle(false);
-    column.set_position(470);
-    column.set_start_child(Some(&build_terminal_pane(runtime)));
-    column.set_end_child(Some(&build_lower_primary_row(runtime)));
-    column.upcast()
-}
-
-fn build_lower_primary_row(runtime: &RuntimeBootState) -> gtk::Widget {
-    let row = gtk::Paned::new(gtk::Orientation::Horizontal);
-    row.set_wide_handle(false);
-    row.set_position(520);
-    row.set_start_child(Some(&build_panel(
-        "activity",
-        Some("workspace log"),
-        &runtime.activity,
-        "No workspace log entries yet",
-        "native-shell-subpane",
-    )));
-    row.set_end_child(Some(&build_panel(
-        "task center",
-        Some("unread + failed"),
-        &runtime.failures,
-        "No running or failed task panes",
-        "native-shell-subpane",
-    )));
-    row.upcast()
-}
-
-fn build_secondary_column(runtime: &RuntimeBootState) -> gtk::Widget {
-    let column = gtk::Paned::new(gtk::Orientation::Vertical);
-    column.set_wide_handle(false);
-    column.set_position(420);
-    column.set_start_child(Some(&build_panel(
-        "context",
-        Some("workspace + inbox"),
-        &build_context_rows(runtime),
-        "No unread notifications",
-        "native-shell-browserpane",
-    )));
-    column.set_end_child(Some(&build_panel(
-        "selection",
-        Some("operator detail"),
-        &build_selection_rows(runtime),
-        "No selection details yet",
-        "native-shell-subpane",
-    )));
-    column.upcast()
-}
-
-fn build_terminal_pane(runtime: &RuntimeBootState) -> gtk::Widget {
-    let lines = runtime
-        .main_copy
-        .lines()
-        .map(|line| line.to_string())
-        .collect::<Vec<_>>();
-    build_panel(
-        "workspace",
-        Some(&runtime.active_workspace),
-        &lines,
-        "No workspace summary available",
-        "native-shell-mainpane",
-    )
-}
-
-fn build_context_rows(runtime: &RuntimeBootState) -> Vec<String> {
-    let mut rows = vec![];
-    rows.extend(runtime.inbox.iter().cloned());
-    let active = runtime
-        .workspaces
-        .iter()
-        .find(|workspace| workspace.name == runtime.active_workspace);
-    if let Some(active) = active {
-        if let Some(status) = &active.status {
-            rows.push(format!("status  {status}"));
-        }
-        if let Some(progress) = active.progress {
-            rows.push(format!("progress  {progress}%"));
-        }
-    }
-    rows
-}
-
-fn build_selection_rows(runtime: &RuntimeBootState) -> Vec<String> {
-    let mut rows = vec![format!("active workspace  {}", runtime.active_workspace)];
-    rows.extend(
-        runtime
-            .workspaces
-            .iter()
-            .map(|workspace| {
-                format!(
-                    "{}  unread:{} run:{} fail:{}",
-                    workspace.name,
-                    workspace.unread_count,
-                    workspace.running_count,
-                    workspace.failed_count
-                )
-            })
-            .take(6),
-    );
-    rows
-}
-
-fn build_panel(
-    title: &str,
-    subtitle: Option<&str>,
-    rows: &[String],
-    empty: &str,
-    panel_class: &str,
-) -> gtk::Widget {
-    let frame = gtk::Frame::new(None);
-    frame.add_css_class("native-shell-pane");
-    frame.add_css_class(panel_class);
-
-    let shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    header.add_css_class("native-shell-pane-header");
-
-    let title_label = gtk::Label::new(Some(title));
-    title_label.add_css_class("native-shell-pane-title");
-    title_label.set_xalign(0.0);
-
-    let subtitle_label = gtk::Label::new(subtitle);
-    subtitle_label.add_css_class("native-shell-pane-subtitle");
-    subtitle_label.set_xalign(0.0);
-
-    let title_stack = gtk::Box::new(gtk::Orientation::Vertical, 1);
-    title_stack.append(&title_label);
-    if subtitle.is_some() {
-        title_stack.append(&subtitle_label);
-    }
-
-    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
-
-    let controls = gtk::Label::new(Some("◦ ◦ ◦"));
-    controls.add_css_class("native-shell-pane-controls");
-
-    header.append(&title_stack);
-    header.append(&spacer);
-    header.append(&controls);
-
-    let body = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    body.add_css_class("native-shell-pane-body");
-    if rows.is_empty() {
-        let line = gtk::Label::new(Some(empty));
-        line.add_css_class("native-shell-panel-copy");
-        line.set_xalign(0.0);
-        line.set_wrap(true);
-        body.append(&line);
-    } else {
-        for row in rows {
-            let line = gtk::Label::new(Some(row));
-            line.add_css_class("native-shell-panel-copy");
-            line.set_xalign(0.0);
-            line.set_wrap(true);
-            body.append(&line);
-        }
-    }
-
-    shell.append(&header);
-    shell.append(&body);
-    frame.set_child(Some(&shell));
-    frame.upcast()
+fn sibling_binary(name: &str) -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    Some(exe.with_file_name(name))
 }
 
 fn install_css() {
-    let Some(display) = gdk::Display::default() else {
-        return;
-    };
-
     let provider = gtk::CssProvider::new();
     provider.load_from_data(
-        r#"
-        window {
-          background: #121116;
-          color: #f2f2f0;
-          font-family: "DM Mono", "SF Mono", monospace;
+        "
+        .native-shell-window, .shell-root, window, box {
+          font-family: 'DM Mono', 'SF Mono', monospace;
         }
 
-        .native-shell-root {
-          background: #121116;
+        .shell-root {
+          background: #111116;
+          color: #d8d8dc;
         }
 
-        .native-shell-chrome {
-          min-height: 34px;
-          padding: 6px 12px 5px 12px;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
-          background: #18181d;
+        .shell-chrome {
+          background: #17171d;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
         }
 
-        .native-shell-eyebrow,
-        .native-shell-rail-subtitle {
-          color: rgba(255,255,255,0.30);
-          font-size: 9px;
-          letter-spacing: 0.10em;
+        .chrome-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #f2f2f5;
         }
 
-        .native-shell-title,
-        .native-shell-rail-title {
-          color: #f2f2f0;
+        .chrome-subtitle, .pane-subtitle, .rail-eyebrow, .rail-meta, .row-detail, .workspace-summary, .workspace-hint, .info-label, .empty-state {
           font-size: 11px;
-          font-weight: 500;
+          color: #8d8e99;
         }
 
-        .native-shell-status-chip {
-          padding: 2px 7px;
-          border-radius: 4px;
-          color: #b7b6b2;
-          background: rgba(255,255,255,0.03);
-          font-size: 10px;
-        }
-
-        .native-shell-body {
-          background: #121116;
-        }
-
-        .native-shell-rail {
-          min-width: 176px;
-          padding: 10px 10px 8px 10px;
-          border-right: 1px solid rgba(255,255,255,0.04);
-          background: #17181a;
-        }
-
-        .native-shell-nav {
-          background: transparent;
-        }
-
-        .native-shell-nav row {
-          background: transparent;
-          min-height: 26px;
-          border-radius: 0;
-        }
-
-        .native-shell-nav row.is-active {
-          background: rgba(255,255,255,0.06);
-        }
-
-        .native-shell-nav-row-content {
-          padding: 2px 6px;
-        }
-
-        .native-shell-nav-label,
-        .native-shell-nav-dot,
-        .native-shell-nav-badge {
-          color: #c8c7c3;
-          font-size: 11px;
-        }
-
-        .native-shell-pane {
-          margin: 0;
-          background: #111214;
-          border-radius: 0;
-          border: 1px solid rgba(255,255,255,0.04);
-        }
-
-        .native-shell-mainpane {
-          background: #0d0e10;
-        }
-
-        .native-shell-browserpane,
-        .native-shell-subpane {
-          background: #111214;
-        }
-
-        .native-shell-pane-header {
-          min-height: 28px;
+        .chrome-pill {
           padding: 4px 8px;
-          border-bottom: 1px solid rgba(255,255,255,0.04);
-          background: #191a1d;
+          background: #202029;
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 999px;
+          color: #d8d8dc;
         }
 
-        .native-shell-pane-title {
-          color: #e8e7e3;
+        .workspace-rail {
+          background: #15161c;
+          border-right: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .rail-row {
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: transparent;
+          border: 1px solid transparent;
+        }
+
+        .rail-row.active {
+          background: #222530;
+          border-color: rgba(122, 161, 255, 0.18);
+        }
+
+        .rail-name, .pane-title, .row-title, .workspace-title, .info-value {
+          font-size: 13px;
+          font-weight: 600;
+          color: #f1f1f5;
+        }
+
+        .rail-trailing {
           font-size: 10px;
-          font-weight: 500;
+          color: #7aa1ff;
         }
 
-        .native-shell-pane-subtitle,
-        .native-shell-pane-controls {
-          color: rgba(255,255,255,0.30);
-          font-size: 9px;
+        .pane-panel {
+          background: #15161c;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 0;
         }
 
-        .native-shell-pane-body {
-          padding: 10px 10px 12px 10px;
-          background: inherit;
+        .pane-header {
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          background: #171920;
         }
 
-        .native-shell-panel-copy {
-          color: rgba(255,255,255,0.70);
-          font-size: 11px;
+        .pane-body {
+          background: #13141a;
         }
 
-        separator {
-          background: rgba(255,255,255,0.05);
-          min-width: 1px;
-          min-height: 1px;
+        .workspace-title {
+          font-size: 18px;
         }
-        "#,
+
+        .action-button {
+          background: #202532;
+          color: #e8e9ef;
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.08);
+          padding: 6px 10px;
+        }
+
+        .list-row, .info-row {
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        ",
     );
 
-    gtk::style_context_add_provider_for_display(
-        &display,
-        &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
+    if let Some(display) = gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+    }
 }

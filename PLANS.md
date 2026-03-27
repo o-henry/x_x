@@ -372,3 +372,19 @@ After each phase:
   Keep status/progress/log as workspace-scoped structured stores with explicit limits and clear mutation semantics; do not let ad hoc user vars become the persistence format.
 - Task Center scope creep is a risk.
   Reuse launcher-style filtering and existing overlay surfaces. Do not turn Phase 3 planning into a sidebar, browser, or daemon design.
+
+## Native Shell Functional Pass
+
+- Screenshot facts to preserve:
+  - Persistent left workspace rail stays visible at all times.
+  - Thin dark top chrome remains compact and secondary to the work surface.
+  - Center pane is the primary work surface; right and lower panes stay persistent rather than overlay-driven.
+  - UI must reflect real Kaku runtime state instead of placeholder cards or fake telemetry.
+- This pass focuses on runtime-backed interaction, not another layout rewrite.
+- Exact files to change:
+  - `kaku-native-shell/src/main.rs`
+- Done for this pass means:
+  - selecting a workspace in the rail updates center/right/lower panes
+  - shell buttons visibly mutate real mux-backed state
+  - status/progress/log/unread changes are observable in the running UI
+  - code compiles and the native shell still boots shared runtime directly
