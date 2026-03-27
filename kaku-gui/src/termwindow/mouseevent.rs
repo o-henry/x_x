@@ -850,6 +850,9 @@ impl super::TermWindow {
                     self.tab_drag_state = None;
                     self.do_new_tab_button_click(MousePress::Left);
                 }
+                TabBarItem::OperatorMarker { .. } => {
+                    self.tab_drag_state = None;
+                }
                 TabBarItem::None | TabBarItem::LeftStatus | TabBarItem::RightStatus => {
                     self.tab_drag_state = None;
                     let maximized = self
@@ -904,6 +907,7 @@ impl super::TermWindow {
                     self.tab_drag_state = None;
                     self.do_new_tab_button_click(MousePress::Middle);
                 }
+                TabBarItem::OperatorMarker { .. } => {}
                 TabBarItem::None
                 | TabBarItem::LeftStatus
                 | TabBarItem::RightStatus
@@ -918,6 +922,7 @@ impl super::TermWindow {
                     self.tab_drag_state = None;
                     self.do_new_tab_button_click(MousePress::Right);
                 }
+                TabBarItem::OperatorMarker { .. } => {}
                 TabBarItem::None
                 | TabBarItem::LeftStatus
                 | TabBarItem::RightStatus
@@ -939,7 +944,8 @@ impl super::TermWindow {
                 }
                 TabBarItem::WindowButton(_)
                 | TabBarItem::Tab { .. }
-                | TabBarItem::NewTabButton { .. } => {}
+                | TabBarItem::NewTabButton { .. }
+                | TabBarItem::OperatorMarker { .. } => {}
             },
             WMEK::VertWheel(n) => {
                 if self.config.mouse_wheel_scrolls_tabs {

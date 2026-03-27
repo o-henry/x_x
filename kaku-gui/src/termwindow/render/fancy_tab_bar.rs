@@ -146,6 +146,23 @@ impl crate::TermWindow {
                     })
                     .border(BoxDimension::new(Dimension::Pixels(0.)))
                     .colors(bar_colors.clone()),
+                TabBarItem::OperatorMarker { .. } => element
+                    .item_type(UIItemType::TabBar(item.item.clone()))
+                    .line_height(Some(1.75))
+                    .margin(BoxDimension {
+                        left: Dimension::Cells(0.),
+                        right: Dimension::Cells(0.),
+                        top: Dimension::Cells(0.),
+                        bottom: Dimension::Cells(0.),
+                    })
+                    .padding(BoxDimension {
+                        left: Dimension::Cells(0.),
+                        right: Dimension::Cells(0.),
+                        top: Dimension::Cells(0.),
+                        bottom: Dimension::Cells(0.),
+                    })
+                    .border(BoxDimension::new(Dimension::Pixels(0.)))
+                    .colors(bar_colors.clone()),
                 TabBarItem::NewTabButton => Element::new(
                     &font,
                     ElementContent::Poly {

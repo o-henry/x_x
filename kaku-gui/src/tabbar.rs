@@ -27,6 +27,7 @@ pub enum TabBarItem {
     LeftStatus,
     RightStatus,
     Tab { tab_idx: usize, active: bool },
+    OperatorMarker { tab_idx: usize, active: bool },
     NewTabButton,
     WindowButton(IntegratedTitleButton),
 }
@@ -45,6 +46,8 @@ struct TitleText {
     items: Vec<FormatItem>,
     len: usize,
 }
+
+const OPERATOR_MARKER_LABEL: &str = " · ops";
 
 fn call_format_tab_title(
     tab: &TabInformation,
@@ -216,6 +219,16 @@ pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
     };
 
     prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, base_title))
+}
+
+fn tab_has_actionable_operator_state(tab: &TabInformation) -> bool {
+    tab.unread_notification_count > 0
+        || tab.workspace_status.is_some()
+        || tab.workspace_progress.is_some()
+}
+
+fn operator_marker_suffix(tab: &TabInformation) -> Option<String> {
+    tab_has_actionable_operator_state(tab).then(|| OPERATOR_MARKER_LABEL.to_string())
 }
 
 fn prefix_unread_marker(tab: &TabInformation, title: String) -> String {
@@ -706,9 +719,20 @@ impl TabBarState {
         }
 
         for (tab_idx, tab_title) in tab_titles.iter().enumerate() {
+            let operator_marker = operator_marker_suffix(&tab_info[tab_idx]);
+            let operator_marker_len = operator_marker
+                .as_ref()
+                .map(|marker| unicode_column_width(marker, None))
+                .unwrap_or(0);
             let tab_title_len = tab_title.len.min(tab_width_max);
+            let title_body_max = tab_width_max.saturating_sub(operator_marker_len).max(1);
             let active = tab_idx == active_tab_no;
-            let hover = !active && is_tab_hover(mouse_x, x, tab_title_len);
+            let hover = !active
+                && is_tab_hover(
+                    mouse_x,
+                    x,
+                    tab_title_len.min(title_body_max) + operator_marker_len,
+                );
 
             // Recompute the title so that it factors in both the hover state
             // and the adjusted maximum tab width based on available space.
@@ -718,7 +742,7 @@ impl TabBarState {
                 pane_info,
                 config,
                 hover,
-                tab_title_len,
+                title_body_max,
             );
 
             let cell_attrs = if active {
@@ -742,8 +766,28 @@ impl TabBarState {
             );
 
             let title = tab_line.clone();
-            if tab_line.len() > tab_width_max {
-                tab_line.resize(tab_width_max, SEQ_ZERO);
+            if tab_line.len() > title_body_max {
+                tab_line.resize(title_body_max, SEQ_ZERO);
+            }
+
+            let marker_start_idx = tab_start_idx + tab_line.len();
+            if let Some(marker) = operator_marker {
+                let marker_line = parse_status_text(
+                    &marker,
+                    if config.use_fancy_tab_bar {
+                        CellAttributes::default()
+                    } else {
+                        cell_attrs.clone()
+                    },
+                );
+                tab_line.append_line(marker_line.clone(), SEQ_ZERO);
+                items.push(TabEntry {
+                    item: TabBarItem::OperatorMarker { tab_idx, active },
+                    title: marker_line,
+                    progress: Progress::None,
+                    x: marker_start_idx,
+                    width: operator_marker_len,
+                });
             }
 
             let width = tab_line.len();
@@ -1093,7 +1137,10 @@ mod test {
         assert_eq!(operator_marker_suffix(&passive), None);
 
         let actionable = sample_tab_with_metadata(1, Some("blocked"), Some(37));
-        assert_eq!(operator_marker_suffix(&actionable).as_deref(), Some(" · ops"));
+        assert_eq!(
+            operator_marker_suffix(&actionable).as_deref(),
+            Some(" · ops")
+        );
     }
 
     #[test]
@@ -1117,9 +1164,9 @@ mod test {
         let config = config::ConfigHandle::default_config();
         let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
 
-        assert!(!state.items().iter().any(|entry| matches!(
-            entry.item,
-            TabBarItem::OperatorMarker { .. }
-        )));
+        assert!(!state
+            .items()
+            .iter()
+            .any(|entry| matches!(entry.item, TabBarItem::OperatorMarker { .. })));
     }
 }
