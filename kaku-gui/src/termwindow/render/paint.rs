@@ -781,6 +781,22 @@ mod tests {
     use wezterm_term::color::{ColorPalette, SrgbaTuple};
     use window::color::LinearRgba;
 
+    fn paint_source() -> &'static str {
+        include_str!("paint.rs")
+    }
+
+    fn operator_nav_source() -> String {
+        let source = paint_source();
+        let start = source
+            .find("fn paint_operator_nav(&mut self) -> anyhow::Result<()>")
+            .expect("operator nav renderer should exist");
+        let tail = &source[start..];
+        let end = tail
+            .find("\n    pub fn paint_impl(")
+            .expect("operator nav renderer should end before paint_impl");
+        tail[..end].to_string()
+    }
+
     #[test]
     fn light_palette_uses_gold_background_and_dark_text() {
         let mut palette = ColorPalette::default();
@@ -811,5 +827,31 @@ mod tests {
             LinearRgba(expected_bg.0, expected_bg.1, expected_bg.2, 0.9)
         );
         assert_eq!(text, LinearRgba(1.0, 1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn operator_nav_render_keeps_explicit_hit_targets() {
+        let source = operator_nav_source();
+
+        assert!(source.contains(".item_type(UIItemType::OperatorNav(item))"));
+        assert!(source.contains("fn paint_operator_nav(&mut self) -> anyhow::Result<()>"));
+    }
+
+    #[test]
+    fn operator_nav_render_stays_compact_and_avoids_phase_six_panel_headers() {
+        let source = operator_nav_source();
+
+        assert!(
+            !source.contains("ElementContent::Text(\"KAKU\".to_string())"),
+            "operator rail regressed into a branded panel header"
+        );
+        assert!(
+            !source.contains("current_workspace_name()"),
+            "operator rail regressed into a dedicated workspace header block"
+        );
+        assert!(
+            !source.contains("format!(\"{} {}\", item.icon(), item.label())"),
+            "operator rail regressed into wide icon+label rows instead of compact one-line items"
+        );
     }
 }

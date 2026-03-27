@@ -218,7 +218,7 @@ pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
         "no pane".to_string()
     };
 
-    prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, base_title))
+    prefix_unread_marker(tab, apply_workspace_metadata_plain_suffix(tab, base_title))
 }
 
 fn tab_has_actionable_operator_state(tab: &TabInformation) -> bool {
@@ -240,11 +240,27 @@ fn prefix_unread_marker(tab: &TabInformation, title: String) -> String {
 }
 
 fn workspace_metadata_suffix(tab: &TabInformation) -> Option<String> {
+    if tab_has_actionable_operator_state(tab) {
+        None
+    } else {
+        workspace_metadata_plain_suffix(tab)
+    }
+}
+
+fn workspace_metadata_plain_suffix(tab: &TabInformation) -> Option<String> {
     match (&tab.workspace_status, tab.workspace_progress) {
         (Some(status), Some(progress)) => Some(format!(" · [{status}] {progress}%")),
         (Some(status), None) => Some(format!(" · [{status}]")),
         (None, Some(progress)) => Some(format!(" · {progress}%")),
         (None, None) => None,
+    }
+}
+
+fn apply_workspace_metadata_plain_suffix(tab: &TabInformation, title: String) -> String {
+    if let Some(suffix) = workspace_metadata_plain_suffix(tab) {
+        format!("{title}{suffix}")
+    } else {
+        title
     }
 }
 

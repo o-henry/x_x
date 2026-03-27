@@ -1597,6 +1597,22 @@ mod tests {
     use mux::pane::PaneId;
     use window::{Modifiers, MouseCursor, WindowDecorations};
 
+    fn mouseevent_source() -> &'static str {
+        include_str!("mouseevent.rs")
+    }
+
+    fn operator_nav_handler_source() -> String {
+        let source = mouseevent_source();
+        let start = source
+            .find("fn mouse_event_operator_nav(")
+            .expect("operator nav handler should exist");
+        let tail = &source[start..];
+        let end = tail
+            .find("\n    pub fn mouse_event_close_tab(")
+            .expect("operator nav handler should end before close-tab handler");
+        tail[..end].to_string()
+    }
+
     #[test]
     fn terminal_capture_keeps_release_routed_to_terminal() {
         assert_eq!(
@@ -1702,6 +1718,17 @@ mod tests {
                 active: true,
             }),
             MouseCursor::Arrow
+        );
+    }
+
+    #[test]
+    fn operator_nav_clicks_route_through_activation_helper() {
+        let source = operator_nav_handler_source();
+
+        assert!(source.contains("self.activate_operator_nav(nav_item);"));
+        assert!(
+            !source.contains("show_task_center_with_scope(TaskCenterScope::with_query"),
+            "mouse routing should preserve the existing activation seam instead of bypassing it"
         );
     }
 }
