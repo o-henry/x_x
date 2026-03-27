@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-03-27T11:59:33.356Z"
-last_activity: 2026-03-27
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-27T13:40:48.097Z"
+last_activity: 2026-03-27 -- Phase 06 execution started
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 29
+  completed_plans: 26
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26)
 
 **Core value:** A solo Unity developer can see which pane needs attention, keep failed work visible, and recover or navigate quickly without leaving Kaku's existing UX model.
-**Current focus:** Phase 05 — hardening-and-compatibility
+**Current focus:** Phase 06 — operator-ui-surfaces
 
 ## Current Position
 
-Phase: 05 (hardening-and-compatibility) — EXECUTING
-Plan: 1 of 1
-Status: Phase complete — ready for verification
-Last activity: 2026-03-27
+Phase: 06 (operator-ui-surfaces) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 06
+Last activity: 2026-03-27 -- Phase 06 execution started
 
 Progress: [██████████] 100%
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100%
 | Phase 05-hardening-and-compatibility P02 | 15min | 2 tasks | 12 files |
 | Phase 05-hardening-and-compatibility P04 | 510 | 1 tasks | 6 files |
 | Phase 05-hardening-and-compatibility P05 | 18min | 2 tasks | 5 files |
+| Phase 06-operator-ui-surfaces P01 | 19min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,7 @@ Recent decisions affecting current work:
 - [Phase 05-hardening-and-compatibility]: Used the real kaku-gui runtime and exact kaku cli commands as the source of truth for the Wave 4 UAT artifact.
 - [Phase 05-hardening-and-compatibility]: Treated the freshly rebuilt live gui socket as the source of truth for the respawn check instead of trusting the stale published socket path.
 - [Phase 05-hardening-and-compatibility]: Removed the respawn limitation from Phase 5 docs only after the rebuilt runtime returned status=respawn end-to-end.
+- [Phase 06-operator-ui-surfaces]: TermWindow now refreshes status and progress caches together before repainting UI metadata surfaces.
 
 ### Pending Todos
 
@@ -90,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T11:59:33.349Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-03-27T13:40:48.090Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None

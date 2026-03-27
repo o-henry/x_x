@@ -15,6 +15,7 @@ This roadmap turns the existing local Kaku fork into a Rust-only control plane f
 - [ ] **Phase 3: Task Center Overlay** - Add a searchable overlay for unread, failed, running, and focusable work.
 - [ ] **Phase 4: Task-Pane Lifecycle** - Add remain-on-exit, rerun/respawn, watchdog silence, and pipe-pane behavior.
 - [x] **Phase 5: Hardening and Compatibility** - Lock down command contracts, tests, docs, and regression safety.
+- [ ] **Phase 6: Operator UI Surfaces** - Make the control plane operable from native Kaku UI with mouse/keyboard-first flows instead of CLI recall.
 
 ## Phase Details
 
@@ -89,6 +90,23 @@ Plans:
   4. The finished fork still feels like Kaku rather than a different shell, large redesign, or cmux clone.
 **Plans**: TBD
 
+### Phase 6: Operator UI Surfaces
+**Goal**: Developer can operate the control plane from native Kaku UI surfaces without memorizing CLI commands, while preserving Kaku's additive feel.
+**Depends on**: Phase 5
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05
+**Success Criteria** (what must be TRUE):
+  1. Developer can discover the most common control-plane actions from visible Kaku UI surfaces instead of remembering CLI verbs.
+  2. Developer can inspect unread, failed, running, and workspace-scoped context through keyboard-friendly and mouse-friendly UI affordances.
+  3. Developer can execute the common action path from UI, including focus, clear unread, rerun/respawn, and metadata editing flows where appropriate.
+  4. The new surfaces still feel like Kaku overlays, inspectors, menus, or tabbar affordances rather than a separate dashboard shell.
+**Plans**: 4 plans
+Plans:
+- [ ] 06-01-PLAN.md — Add the Phase 06 controller seam: scoped Task Center bootstrap plus typed workspace metadata read/write helpers in TermWindow and the client-domain transport.
+- [ ] 06-02-PLAN.md — Upgrade Task Center into the primary operator surface with visible inline actions and keyboard+mouse parity.
+- [ ] 06-03-PLAN.md — Add compact tabbar operator affordances and click-through discovery into scoped Task Center views.
+- [ ] 06-04-PLAN.md — Close Phase 06 with targeted verification, changed-files/limitations/UAT artifacts, and shipped-shape spec updates.
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -98,3 +116,4 @@ Plans:
 | 3. Task Center Overlay | 0/TBD | Not started | - |
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
 | 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
+| 6. Operator UI Surfaces | 0/TBD | Not started | - |
