@@ -200,3 +200,21 @@ impl CliListResultItem {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn existing_cli_regressions_list_defaults_to_table_output() {
+        let cmd = ListCommand::parse_from(["kaku"]);
+        assert!(matches!(cmd.format, CliOutputFormatKind::Table));
+    }
+
+    #[test]
+    fn existing_cli_regressions_list_accepts_json_output() {
+        let cmd = ListCommand::parse_from(["kaku", "--format", "json"]);
+        assert!(matches!(cmd.format, CliOutputFormatKind::Json));
+    }
+}

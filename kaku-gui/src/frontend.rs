@@ -353,6 +353,7 @@ impl GuiFrontEnd {
                 MuxNotification::PaneAdded(_) => {}
                 MuxNotification::NotificationsChanged => {}
                 MuxNotification::WorkspaceMetadataChanged => {}
+                MuxNotification::TaskPaneLifecycleChanged(_) => {}
                 MuxNotification::Alert {
                     pane_id,
                     alert:

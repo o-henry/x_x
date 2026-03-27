@@ -72,9 +72,90 @@ while preserving vanilla Kaku's feel.
   prompt/confirm metadata editing that stay additive to Kaku instead of
   introducing a dashboard shell
   Residual scope note:
-  the targeted `kaku-gui` closeout suite is green, but the 2026-03-27
-  closeout reattempt did not produce a fresh responsive GUI socket for a new
-  live desktop pass, so that gap remains documented in the phase limitations
+  the targeted `kaku-gui` closeout suite is green, the rebuilt runtime now has
+  a fresh responsive socket plus a rechecked native Task Center keyboard path,
+  but the visual treatment is still more text-heavy and utilitarian than the
+  desired reference-video operator polish
+- [ ] Phase 7: operator visual polish toward the provided video reference
+  Intended outcome:
+  keep the native Rust/Kaku architecture, but replace the current utilitarian
+  treatment with a more intentional DM Mono + icon-first operator look, remove
+  texty affordances like `· ops` where appropriate, and push Task Center/tabbar
+  composition closer to the provided reference without becoming a dashboard shell
+  Reference-driven observations:
+  the provided video shows a slim edge-attached left rail rather than a large
+  floating card, compact dark chrome, a visually dominant main work area, and
+  persistent pane hierarchy where navigation remains visible instead of opening
+  as a separate dashboard overlay
+  Fixed layout slots:
+  `left rail`, `top chrome/status strip`, `primary terminal/editor area`,
+  `secondary utility/context area`, and only compact inline state markers
+  Phase 7 implementation order:
+  1. make the left rail structurally match the reference first
+  2. tighten top chrome and tab/title composition to match the reference density
+  3. reduce text noise in markers and action hints
+  4. only then refine colors, iconography, and spacing
+  Exact files for Phase 7:
+  [kaku-gui/src/termwindow/mod.rs](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-gui/src/termwindow/mod.rs),
+  [kaku-gui/src/termwindow/render/paint.rs](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-gui/src/termwindow/render/paint.rs),
+  [kaku-gui/src/termwindow/render/fancy_tab_bar.rs](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-gui/src/termwindow/render/fancy_tab_bar.rs),
+  [kaku-gui/src/tabbar.rs](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-gui/src/tabbar.rs)
+  Validation rule:
+  do not call Phase 7 visually complete until a fresh runtime screenshot is
+  compared against the reference frame structure and the rail/chrome hierarchy
+  is no longer card-like or overlay-like
+  Concrete reference elements to follow:
+  - `left rail`
+    narrow, edge-attached, full-height, low-contrast background, compact rows,
+    no large rounded outer card, active item indicated subtly instead of a big
+    filled block
+  - `top chrome`
+    minimal title/status strip with restrained density, no noisy helper labels,
+    and a clearer separation between chrome and the primary work surface
+  - `main work surface`
+    terminal/editor area must remain visually dominant and start immediately to
+    the right of the rail, not look boxed in by dashboard panels
+  - `secondary context surface`
+    if present, it should read as a real persistent pane or split, not a popup
+    or floating dashboard card
+  - `iconography`
+    state should be conveyed with compact symbols and spacing, not punctuation
+    or long textual helper hints
+  New implementation approach:
+  - stop iterating on `Task Center` as the primary visual target
+  - treat the reference as a `main window layout` problem first, and an overlay
+    problem second
+  - redesign the persistent `termwindow` chrome and content slots before doing
+    more polish on overlay rows
+  - keep the existing Kaku/mux/task control behavior, but move its visibility
+    into a quieter always-on structure
+  Required technical work:
+  - add a dedicated native left-rail renderer with row hit targets and active
+    state that does not rely on a generic boxed `Element` card layout
+  - tighten or partially replace the current fancy tab bar composition so the
+    top strip reads like application chrome instead of a decorated terminal tab
+  - introduce a native right-side contextual pane or reserved split region only
+    if the reference structure requires it; do not fake this with overlay-only UI
+  - add screenshot-based runtime checkpoints after each structural step
+  What is likely needed beyond current code:
+  - no web frontend stack is required
+  - no Swift/Xcode layer is required
+  - the current Rust rendering path is sufficient for another pass, but if we
+    still cannot reach the target structure after a focused main-window rewrite,
+    the next honest step would be introducing a proper native widget container
+    layer inside Rust rather than continuing to force everything through the
+    existing terminal-style box model
+  Stop conditions:
+  - if the rail still reads as a card after the dedicated rail renderer pass,
+    stop and switch implementation strategy
+  - if the top chrome still reads like stock Kaku tab UI after the chrome pass,
+    stop and redesign that strip directly instead of polishing colors
+  Phase 7 plans:
+  1. `07-01-PLAN.md` — rebuild the persistent left rail first so it becomes a slim edge-attached native surface instead of another operator card
+  2. `07-02-PLAN.md` — tighten top chrome and tab/title composition into quieter DM Mono-first app chrome with icon-first markers
+  3. `07-03-PLAN.md` — rebalance the main work-surface hierarchy and stop for a structural screenshot gate before any overlay polish
+  4. `07-04-PLAN.md` — refine Task Center only as a secondary surface after the persistent shell structure is approved
+  5. `07-05-PLAN.md` — close Phase 07 with regression evidence, screenshot-based UAT, and honest docs on whether the current renderer was sufficient
 
 ## Non-Goals
 

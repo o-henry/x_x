@@ -27,14 +27,13 @@ pub enum AllowImage {
 
 const STATUS_DOT_SIZE: f32 = 14.0;
 const BROADCAST_ICON_SIZE: f32 = 24.0;
-const OPERATOR_NAV_PANEL_BG: LinearRgba = LinearRgba::with_components(0.082, 0.080, 0.096, 0.98);
-const OPERATOR_NAV_BORDER: LinearRgba = LinearRgba::with_components(0.88, 0.88, 0.96, 0.07);
-const OPERATOR_NAV_TEXT: LinearRgba = LinearRgba::with_components(0.82, 0.82, 0.87, 1.0);
-const OPERATOR_NAV_DIM: LinearRgba = LinearRgba::with_components(0.46, 0.46, 0.53, 1.0);
-const OPERATOR_NAV_ACTIVE_BG: LinearRgba =
-    LinearRgba::with_components(0.16, 0.17, 0.21, 0.62);
+const OPERATOR_NAV_PANEL_BG: LinearRgba = LinearRgba::with_components(0.043, 0.045, 0.051, 0.985);
+const OPERATOR_NAV_BORDER: LinearRgba = LinearRgba::with_components(0.88, 0.88, 0.96, 0.045);
+const OPERATOR_NAV_TEXT: LinearRgba = LinearRgba::with_components(0.73, 0.74, 0.79, 1.0);
+const OPERATOR_NAV_DIM: LinearRgba = LinearRgba::with_components(0.34, 0.35, 0.40, 1.0);
+const OPERATOR_NAV_ACTIVE_BG: LinearRgba = LinearRgba::with_components(0.10, 0.11, 0.14, 0.92);
 const OPERATOR_NAV_ACTIVE_TEXT: LinearRgba = LinearRgba::with_components(0.97, 0.97, 1.0, 1.0);
-const OPERATOR_NAV_ACCENT: LinearRgba = LinearRgba::with_components(0.67, 0.71, 0.92, 1.0);
+const OPERATOR_NAV_ACCENT: LinearRgba = LinearRgba::with_components(0.49, 0.56, 0.90, 1.0);
 
 static ACTIVE_PANE_INDICATOR_POLY: &[Poly] = &[Poly {
     path: &[PolyCommand::Circle {
@@ -149,14 +148,14 @@ impl crate::TermWindow {
         } else {
             0.0
         };
-        let top_inset = border.top.get() as f32 + tab_bar_height + 10.0;
+        let top_inset = border.top.get() as f32 + tab_bar_height + 4.0;
         let bottom_inset = border.bottom.get() as f32
             + if self.show_tab_bar && self.config.tab_bar_at_bottom {
                 self.tab_bar_pixel_height().unwrap_or(0.0)
             } else {
                 0.0
             }
-            + 12.0;
+            + 8.0;
 
         let counts = self.operator_nav_counts();
         let mut rows = Vec::with_capacity(counts.len());
@@ -216,7 +215,7 @@ impl crate::TermWindow {
                     })
                     .hover_colors(Some(ElementColors {
                         border: BorderColor::new(OPERATOR_NAV_ACCENT.into()),
-                        bg: LinearRgba::with_components(0.15, 0.16, 0.20, 1.0).into(),
+                        bg: LinearRgba::with_components(0.11, 0.12, 0.16, 1.0).into(),
                         text: OPERATOR_NAV_ACTIVE_TEXT.into(),
                     }))
                     .padding(BoxDimension {
@@ -1069,6 +1068,20 @@ mod tests {
         assert!(
             !source.contains(".border_corners(Some(Corners"),
             "operator rail regressed into rounded card rows instead of quiet edge chrome"
+        );
+    }
+
+    #[test]
+    fn operator_nav_render_keeps_top_inset_close_to_chrome() {
+        let source = operator_nav_source();
+
+        assert!(
+            source.contains("tab_bar_height + 4.0"),
+            "operator rail should begin close to the top chrome instead of floating below it"
+        );
+        assert!(
+            !source.contains("tab_bar_height + 10.0"),
+            "operator rail regressed into a large floating inset below the top chrome"
         );
     }
 }

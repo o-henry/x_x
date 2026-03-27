@@ -126,6 +126,16 @@ impl WorkspaceStateStore {
         self.progress_by_workspace.get(workspace).cloned()
     }
 
+    pub fn list_progress(&self) -> Vec<WorkspaceProgressRecord> {
+        let mut records = self
+            .progress_by_workspace
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.workspace.cmp(&right.workspace));
+        records
+    }
+
     pub fn append_log(&mut self, workspace: &str, message: &str) -> WorkspaceLogRecord {
         self.next_log_seq += 1;
         let record = WorkspaceLogRecord {
@@ -135,7 +145,10 @@ impl WorkspaceStateStore {
             created_at: utc_now(),
         };
 
-        let logs = self.logs_by_workspace.entry(workspace.to_string()).or_default();
+        let logs = self
+            .logs_by_workspace
+            .entry(workspace.to_string())
+            .or_default();
         logs.push(record.clone());
         if logs.len() > WORKSPACE_LOG_CAP {
             let overflow = logs.len() - WORKSPACE_LOG_CAP;
@@ -154,6 +167,12 @@ impl WorkspaceStateStore {
             .get(workspace)
             .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn list_log_workspaces(&self) -> Vec<String> {
+        let mut workspaces = self.logs_by_workspace.keys().cloned().collect::<Vec<_>>();
+        workspaces.sort();
+        workspaces
     }
 
     pub fn rename_workspace(&mut self, old_workspace: &str, new_workspace: &str) -> bool {
@@ -182,7 +201,8 @@ impl WorkspaceStateStore {
             for record in &mut logs {
                 record.workspace = new_workspace.to_string();
             }
-            self.logs_by_workspace.insert(new_workspace.to_string(), logs);
+            self.logs_by_workspace
+                .insert(new_workspace.to_string(), logs);
             changed = true;
         }
 
@@ -253,7 +273,10 @@ mod tests {
 
         let main_logs = store.list_log("unity-main");
         assert_eq!(main_logs.len(), WORKSPACE_LOG_CAP);
-        assert_eq!(main_logs.first().map(|record| record.message.as_str()), Some("main-1"));
+        assert_eq!(
+            main_logs.first().map(|record| record.message.as_str()),
+            Some("main-1")
+        );
         assert_eq!(
             main_logs.last().map(|record| record.message.as_str()),
             Some("main-200")
@@ -269,7 +292,9 @@ mod tests {
     fn rename_workspace_moves_all_metadata_without_losing_values() {
         let mut store = WorkspaceStateStore::new();
         store.set_status("old-name", "running");
-        store.set_progress("old-name", 42).expect("progress should set");
+        store
+            .set_progress("old-name", 42)
+            .expect("progress should set");
         let first = store.append_log("old-name", "first");
         let second = store.append_log("old-name", "second");
 

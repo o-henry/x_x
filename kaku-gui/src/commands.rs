@@ -214,6 +214,7 @@ impl CommandDef {
         // Only include core actions, not dynamic domain/workspace/launch_menu commands
         let core_actions = [
             // Shell menu
+            ShowTaskCenter,
             SpawnWindow,
             SpawnTab(SpawnTabDomain::CurrentPaneDomain),
             SplitHorizontal(SpawnCommand::default()),
@@ -355,6 +356,7 @@ impl CommandDef {
                     | SplitVertical(_)
                     | Search(_)
                     | QuickSelect
+                    | ShowTaskCenter
                     | ShowLauncher
                     | ShowLauncherArgs(_)
                     | ShowTabNavigator
@@ -715,6 +717,7 @@ impl CommandDef {
                     SplitVertical(_) | SplitHorizontal(_) | SplitPane(_) => 30,
                     CloseCurrentTab { .. } | CloseCurrentPane { .. } => 40,
                     ActivateCommandPalette => 25,
+                    ShowTaskCenter => 26,
                     ShowLauncher | ShowLauncherArgs(_) => 50,
                     AttachDomain(_) => 70,
                     DetachDomain(_) => 80,
@@ -2104,6 +2107,14 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &[],
             icon: None,
         },
+        ShowTaskCenter => CommandDef {
+            brief: "Task Center".into(),
+            doc: "Open the task center overlay".into(),
+            keys: vec![(Modifiers::SUPER.union(Modifiers::SHIFT), "j".into())],
+            args: &[ArgType::ActiveWindow],
+            menubar: &["Shell"],
+            icon: None,
+        },
         ShowTabNavigator => CommandDef {
             brief: "Tab Navigator".into(),
             doc: "Interactive tab switcher".into(),
@@ -2511,6 +2522,7 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
         EmitEvent("kaku-launch-lazygit".to_string()),
         EmitEvent("kaku-launch-yazi".to_string()),
         EmitEvent("kaku-open-remote-files".to_string()),
+        ShowTaskCenter,
         SplitVertical(SpawnCommand {
             domain: SpawnTabDomain::CurrentPaneDomain,
             ..Default::default()
@@ -2670,5 +2682,16 @@ mod tests {
         assert!(CommandDef::default_key_assignments(&config)
             .iter()
             .any(|(_, _, action)| *action == KeyAssignment::ToggleAllPanesInputBroadcast));
+    }
+
+    #[test]
+    fn show_task_center_has_default_shortcut() {
+        let cmd =
+            derive_command_from_key_assignment(&KeyAssignment::ShowTaskCenter).expect("command");
+
+        assert_eq!(
+            cmd.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::SHIFT), "j".into())]
+        );
     }
 }

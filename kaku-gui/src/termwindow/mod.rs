@@ -2643,7 +2643,7 @@ impl TermWindow {
         } else {
             0
         };
-        resize::effective_vertical_padding(
+        let (mut top, mut bottom) = resize::effective_vertical_padding(
             &self.config,
             DimensionContext {
                 dpi: self.dimensions.dpi as f32,
@@ -2654,7 +2654,14 @@ impl TermWindow {
             self.config.tab_bar_at_bottom,
             tab_bar_height,
             self.layout_uses_edge_to_edge_padding(),
-        )
+        );
+
+        if self.operator_nav_enabled() && self.show_tab_bar && !self.config.tab_bar_at_bottom {
+            top = top.saturating_sub(4);
+            bottom = bottom.min(2);
+        }
+
+        (top, bottom)
     }
 
     /// Decide whether the tab bar should be visible based on tab count,
@@ -2669,6 +2676,7 @@ impl TermWindow {
             num_tabs,
             has_unread_notifications,
             has_workspace_metadata,
+            self.operator_nav_enabled(),
         )
     }
 
@@ -2704,9 +2712,14 @@ impl TermWindow {
         num_tabs: usize,
         has_unread_notifications: bool,
         has_workspace_metadata: bool,
+        operator_nav_enabled: bool,
     ) -> bool {
         if !enable_tab_bar {
             return false;
+        }
+
+        if operator_nav_enabled {
+            return true;
         }
 
         if is_full_screen || has_unread_notifications || has_workspace_metadata {
@@ -6430,21 +6443,28 @@ mod tests {
     #[test]
     fn single_tab_with_unread_notifications_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, true, false
+            true, true, false, 1, true, false, false
         ));
     }
 
     #[test]
     fn single_tab_without_unread_notifications_still_respects_hide_setting() {
         assert!(!TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, false, false
+            true, true, false, 1, false, false, false
         ));
     }
 
     #[test]
     fn single_tab_with_workspace_metadata_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, false, true
+            true, true, false, 1, false, true, false
+        ));
+    }
+
+    #[test]
+    fn operator_nav_mode_forces_top_chrome_visible_even_with_single_tab() {
+        assert!(TermWindow::should_show_tab_bar_impl(
+            true, true, false, 1, false, false, true
         ));
     }
 

@@ -1,0 +1,26 @@
+# Changed files
+
+- `mux/src/notification_store.rs`: added the mux-owned notification store and unread indexes.
+- `mux/src/lib.rs`: attached notification store helpers and mux notifications to the control plane.
+- `crates/codec/src/lib.rs`: added notification transport requests and response payloads.
+- `crates/wezterm-client/src/client.rs`: added typed notification RPC wrappers.
+- `crates/wezterm-mux-server-impl/src/sessionhandler.rs`: handled notification transport requests on the mux server side.
+- `crates/wezterm-mux-server-impl/src/dispatch.rs`: accepted notification change fan-out in the server dispatch loop.
+- `kaku-gui/src/termwindow/mod.rs`: exposed mux-backed unread tab snapshot fields and refresh handling.
+- `kaku-gui/src/tabbar.rs`: rendered the minimal `! ` unread tab marker.
+- `kaku-gui/src/frontend.rs`: kept GUI mux notification matching exhaustive for notification changes.
+- `kaku/src/cli/mod.rs`: registered the Phase 1 notification CLI commands.
+- `kaku/src/cli/notify.rs`: added notification creation CLI contract and tests.
+- `kaku/src/cli/list_notifications.rs`: added notification list CLI contract, JSON output, and table output.
+- `kaku/src/cli/clear_notifications.rs`: added clear-notifications CLI contract and JSON output.
+- `kaku/src/cli/mark_read.rs`: added mark-read CLI contract and JSON output.
+- `kaku/src/cli/mark_unread.rs`: added mark-unread CLI contract and JSON output.
+- `kaku/src/cli/jump_next_unread.rs`: added the next-unread discovery CLI contract.
+- `kaku/src/cli/jump_prev_unread.rs`: added the previous-unread discovery CLI contract.
+- `kaku/src/cli/identify.rs`: added resolved target discovery JSON output.
+- `kaku/src/cli/capabilities.rs`: added machine-readable notification capability reporting.
+- `kaku/src/cli/list.rs`: added baseline regression coverage for existing list command parsing.
+- `kaku/src/cli/activate_pane.rs`: added baseline regression coverage for existing pane focus CLI behavior.
+- `kaku/src/cli/activate_tab.rs`: added baseline regression coverage for existing tab navigation CLI behavior.
+- `kaku/src/cli/rename_workspace.rs`: added baseline regression coverage for existing workspace rename CLI behavior.
+- `mux/src/tab.rs`: extended baseline tab split regression coverage for pane order and active-pane preservation.

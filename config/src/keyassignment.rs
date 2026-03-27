@@ -693,6 +693,7 @@ pub enum KeyAssignment {
     ScrollToBottom,
     ShowTabNavigator,
     ShowDebugOverlay,
+    ShowTaskCenter,
     HideApplication,
     QuitApplication,
     SpawnCommandInNewTab(SpawnCommand),

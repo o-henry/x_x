@@ -304,13 +304,15 @@ impl Pane for LocalPane {
                             .clean_exit_codes
                             .contains(&status.exit_code()),
                     };
+                    let exit_behavior = Mux::try_get()
+                        .and_then(|mux| mux.task_pane_remain_on_exit(self.pane_id))
+                        .filter(|remain_on_exit| *remain_on_exit)
+                        .map(|_| ExitBehavior::Hold)
+                        .or_else(|| self.exit_behavior())
+                        .unwrap_or_else(|| configuration().exit_behavior);
+                    let killed_flag = *killed;
 
-                    match (
-                        self.exit_behavior()
-                            .unwrap_or_else(|| configuration().exit_behavior),
-                        success,
-                        killed,
-                    ) {
+                    match (exit_behavior, success, killed) {
                         (ExitBehavior::Close, _, _) => *proc = ProcessState::Dead,
                         (ExitBehavior::CloseOnCleanExit, false, _) => {
                             brief = format!("⚠️  Process {cmd} didn't exit cleanly");
@@ -335,6 +337,21 @@ impl Pane for LocalPane {
                         (ExitBehavior::Hold, _, true) => *proc = ProcessState::Dead,
                     }
                     log::debug!("child terminated, new state is {:?}", proc);
+
+                    if let Some(mux) = Mux::try_get() {
+                        let current_working_dir = self
+                            .get_current_working_dir(CachePolicy::AllowStale)
+                            .map(|url| url.to_string());
+                        let user_vars = self.copy_user_vars();
+                        mux.record_task_pane_exit(
+                            self.pane_id,
+                            exit_behavior,
+                            success,
+                            killed_flag,
+                            current_working_dir,
+                            &user_vars,
+                        );
+                    }
                 }
             }
             ProcessState::DeadPendingClose { killed } => {

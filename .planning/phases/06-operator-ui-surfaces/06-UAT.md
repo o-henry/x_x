@@ -6,7 +6,7 @@ source:
   - 06-operator-ui-surfaces-02-SUMMARY.md
   - 06-operator-ui-surfaces-03-SUMMARY.md
 started: 2026-03-27T14:05:00Z
-updated: 2026-03-27T14:05:00Z
+updated: 2026-03-27T14:52:00Z
 runtime:
   gui: ./target/debug/kaku-gui start --always-new-process
   cli: ./target/debug/kaku cli
@@ -14,7 +14,7 @@ runtime:
 
 ## Current Test
 
-[targeted closeout verification completed; fresh live desktop reattempt recorded honestly below]
+[targeted closeout verification completed; fresh live desktop confirmation added below]
 
 ## Session Setup
 
@@ -53,30 +53,28 @@ Observed:
   - hand-cursor hover only on actionable marker regions
 - `cargo check --locked -p kaku-gui` passed.
 
-### Fresh live desktop reattempt
+### Fresh live desktop confirmation
 
 ```bash
-cargo build --locked -p kaku -p kaku-gui
 ./target/debug/kaku-gui start --always-new-process
-./target/debug/kaku cli list --format json
-WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-11680 ./target/debug/kaku cli --no-auto-start --prefer-mux list --format json
-WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux list --format json
-ls -la ~/.local/share/kaku
-tail -n 40 ~/.local/share/kaku/kaku-gui-log-11680.txt
+ls -lt ~/.local/share/kaku | head -20
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-92522 ./target/debug/kaku cli --no-auto-start --prefer-mux list --format json
 ```
 
 Observed:
 
-- The fresh debug build completed successfully.
-- The `start --always-new-process` reattempt produced no fresh responsive GUI socket that the CLI could use during this plan.
-- Direct CLI probes against the two published socket candidates (`gui-sock-11680` and `gui-sock-2572`) hung rather than returning live window/pane JSON.
-- `~/.local/share/kaku/default-fun.tw93.kaku` still pointed to `gui-sock-11680`, and the latest GUI log on disk remained `kaku-gui-log-11680.txt`.
-- The most recent GUI log contained an older `Broken pipe (os error 32)` line rather than evidence of a newly responsive Phase 06 desktop runtime.
+- A fresh GUI session was started manually from the rebuilt binary.
+- `ls -lt ~/.local/share/kaku | head -20` showed the new symlink `default-fun.tw93.kaku -> /Users/henry/.local/share/kaku/gui-sock-92522` plus the fresh socket file `gui-sock-92522`.
+- `WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-92522 ./target/debug/kaku cli --no-auto-start --prefer-mux list --format json` returned live JSON immediately, proving the fresh GUI socket was responsive.
+- Manual desktop interaction on that rebuilt session confirmed:
+  - `Shell -> Task Center` opened successfully
+  - `Arrow Down` moved the active selection
+  - `Enter` triggered the primary action and closed/handed off from the overlay
 
 Result:
 
-- The closeout plan renewed automated end-to-end verification for the shipped operator seams.
-- The plan did **not** renew a fresh live desktop confirmation of the Task Center/tabbar/operator workflow on 2026-03-27. That gap is recorded explicitly in the limitation set instead of being hidden.
+- The rebuilt Phase 06 desktop runtime is now freshly proven to publish a responsive GUI socket.
+- The rebuilt session also has a renewed live confirmation of the core keyboard operator path in Task Center.
 
 ## Tests
 
@@ -107,15 +105,20 @@ evidence: tabbar and mouseevent test slice in `cargo test --locked -p kaku-gui t
 
 ### 6. Fresh live desktop re-run of the rebuilt Phase 06 binary
 expected: `./target/debug/kaku-gui start --always-new-process` publishes a fresh responsive GUI socket so the Task Center/tabbar operator flow can be rechecked live.
-result: partial
-notes: "The rebuild succeeded, but the closeout reattempt did not produce a new responsive GUI socket. The prior live shell confirmation still comes from Phase 05."
+result: pass
+notes: "User-confirmed live run produced `gui-sock-92522`, and the rebuilt binary responded immediately to `kaku cli --no-auto-start --prefer-mux list --format json`."
+
+### 7. Manual keyboard operator path on the rebuilt binary
+expected: Task Center opens from native UI, selection moves with `Arrow Down`, and `Enter` performs the primary action on the rebuilt session.
+result: pass
+notes: "User confirmed `Task Center opened: yes`, `arrow down worked: yes`, and `enter worked: yes` on the rebuilt binary."
 
 ## Summary
 
-total: 6
-passed: 5
+total: 7
+passed: 7
 issues: 0
 pending: 0
 skipped: 0
 blocked: 0
-partial: 1
+partial: 0

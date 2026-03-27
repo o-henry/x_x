@@ -2805,4 +2805,34 @@ mod test {
     fn tab_is_send_and_sync() {
         assert_send_and_sync::<Tab>();
     }
+
+    #[test]
+    fn existing_cli_regressions_tab_split_preserves_active_pane_ordering() {
+        let size = TerminalSize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 800,
+            pixel_height: 600,
+            dpi: 96,
+        };
+
+        let tab = Tab::new(&size);
+        tab.assign_pane(&FakePane::new_arc(PaneId::new(1), size));
+        tab.split_and_insert(
+            0,
+            SplitRequest {
+                direction: SplitDirection::Horizontal,
+                ..Default::default()
+            },
+            FakePane::new_arc(PaneId::new(2), size),
+        )
+        .expect("split");
+
+        let panes = tab.iter_panes();
+        assert_eq!(2, panes.len());
+        assert_eq!(PaneId::new(1), panes[0].pane.pane_id());
+        assert!(!panes[0].is_active);
+        assert_eq!(PaneId::new(2), panes[1].pane.pane_id());
+        assert!(panes[1].is_active);
+    }
 }

@@ -157,3 +157,24 @@ impl ActivateTab {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn existing_cli_regressions_activate_tab_accepts_relative_navigation() {
+        let cmd = ActivateTab::parse_from(["kaku", "--tab-relative", "-1", "--no-wrap"]);
+        assert_eq!(cmd.tab_relative, Some(-1));
+        assert!(cmd.no_wrap);
+        assert_eq!(cmd.tab_id, None);
+    }
+
+    #[test]
+    fn existing_cli_regressions_activate_tab_rejects_conflicting_id_and_relative_flags() {
+        let err = ActivateTab::try_parse_from(["kaku", "--tab-id", "1", "--tab-relative", "1"])
+            .expect_err("conflict");
+        assert!(err.to_string().contains("--tab-relative"));
+    }
+}

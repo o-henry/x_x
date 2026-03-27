@@ -36,6 +36,7 @@ promise.workspace = true
 rangeset.workspace = true
 serde = {workspace=true, features = ["rc", "derive"]}
 shell-words.workspace = true
+shlex.workspace = true
 smol.workspace = true
 terminfo.workspace = true
 termwiz-funcs.workspace = true
