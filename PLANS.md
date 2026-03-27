@@ -54,12 +54,13 @@ while preserving vanilla Kaku's feel.
 - [x] Phase 5: hardening, tests, docs, regression pass
   Shipped outcome:
   green targeted hardening suite, explicit changed-files/limitations/UAT artifacts,
-  failing-pane survivability verified against a live GUI session, and baseline pane
-  management commands preserved
+  failing-pane survivability verified against a live GUI session, baseline pane
+  management commands preserved, and `respawn-pane` rechecked successfully against
+  a freshly rebuilt live runtime
   Residual limitation:
-  `respawn-pane` still returns a live runtime status mismatch (`respawned`) during
-  manual verification, so the documented `respawn` CLI contract is not yet fully
-  proven end-to-end
+  broader live desktop coverage still centers on the default workspace path; Task
+  Center overlay interaction and wider multi-window/workspace behavior continue to
+  rely on targeted automated coverage plus existing Kaku behavior
 
 ## Non-Goals
 

@@ -294,7 +294,7 @@ Wave 4 manual runtime verification on 2026-03-27 established:
 
 Known Phase 5 boundaries:
 
-- `respawn-pane` is not fully closed out in the live runtime: the CLI still receives an unexpected `respawned` status from the server path during manual verification, so the machine-readable `respawn` contract is documented but not yet proven end-to-end
+- the rebuilt live `respawn-pane` path now returns the documented machine-readable `respawn` status; remaining Phase 5 limits are about surrounding manual coverage rather than the respawn contract itself
 - lifecycle records intentionally favor inspectability over aggressive cleanup; long-lived sessions still depend on explicit cleanup/pruning boundaries
 - manual Wave 4 verification focused on the default workspace compatibility path and failing-pane survivability; broader multi-workspace/window interaction still relies on the preserved baseline command surface plus existing automated coverage
 
