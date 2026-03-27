@@ -16,6 +16,7 @@ This roadmap turns the existing local Kaku fork into a Rust-only control plane f
 - [ ] **Phase 4: Task-Pane Lifecycle** - Add remain-on-exit, rerun/respawn, watchdog silence, and pipe-pane behavior.
 - [x] **Phase 5: Hardening and Compatibility** - Lock down command contracts, tests, docs, and regression safety.
 - [x] **Phase 6: Operator UI Surfaces** - Task Center, compact tabbar discoverability, and prompt/confirm metadata editing now make the control plane operable from native Kaku UI without a dashboard rewrite.
+- [ ] **Phase 7: Operator Visual Polish** - Bring the shipped native operator UI closer to the provided video reference with DM Mono defaults, icon-first affordances, and more intentional composition while staying inside native Kaku surfaces.
 
 ## Phase Details
 
@@ -107,6 +108,24 @@ Plans:
 - [x] 06-04-PLAN.md — Close Phase 06 with targeted verification, changed-files/limitations/UAT artifacts, and shipped-shape spec updates.
 **UI hint**: yes
 
+### Phase 7: Operator Visual Polish
+**Goal**: Bring the native operator UI materially closer to the provided video reference without breaking Kaku's additive Rust-native architecture.
+**Depends on**: Phase 6
+**Requirements**: POLISH-01, POLISH-02, POLISH-03, POLISH-04
+**Success Criteria** (what must be TRUE):
+  1. Developer sees DM Mono as the default operator-facing mono typography in the shipped UI surfaces.
+  2. Developer sees compact icon-first state/action affordances instead of text-heavy markers where clarity benefits.
+  3. Task Center and tabbar feel more intentional, composed, and reference-aligned while remaining native Kaku surfaces rather than a dashboard shell.
+  4. Existing Phase 6 operator behavior still works after the visual refresh.
+**Plans**: 5 plans
+Plans:
+- [ ] 07-01-PLAN.md — Rebuild the persistent left rail into a slim edge-attached native navigation surface without regressing the scoped Task Center workflow.
+- [ ] 07-02-PLAN.md — Rewrite the top chrome and tab/title composition into quieter DM Mono-first app chrome with compact icon-first markers.
+- [ ] 07-03-PLAN.md — Rebalance the main work-surface hierarchy and stop for a structural screenshot gate before any overlay-only polish.
+- [ ] 07-04-PLAN.md — Refine Task Center only as a secondary operator surface after the persistent shell structure is approved.
+- [ ] 07-05-PLAN.md — Close Phase 07 with regression evidence, screenshot-based UAT, and honest docs on whether the current renderer was sufficient.
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -117,3 +136,4 @@ Plans:
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
 | 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
 | 6. Operator UI Surfaces | 4/4 | Complete | 2026-03-27 |
+| 7. Operator Visual Polish | 0/TBD | Not started | - |

@@ -56,6 +56,13 @@
 - [x] **UI-04**: Developer can update workspace-facing metadata through UI affordances for the common path, with CLI preserved as an advanced fallback rather than the primary path.
 - [x] **UI-05**: New control-plane UI remains additive and Kaku-native, avoiding a dashboard-shell rewrite while still feeling more operable than a CLI-only workflow.
 
+### Operator Visual Polish
+
+- [x] **POLISH-01**: Developer sees DM Mono as the default operator-facing mono typography in the shipped UI surfaces.
+- [x] **POLISH-02**: Developer sees compact icon-first state and action affordances instead of text-heavy markers where clarity benefits.
+- [x] **POLISH-03**: Developer sees Task Center and tabbar composition that feels materially closer to the provided video reference while still preserving Kaku's additive shell character.
+- [x] **POLISH-04**: Developer can keep using the Phase 6 operator workflow after the visual polish without regressions to focus, rerun, remain-on-exit, metadata editing, or discoverability.
+
 ### Future Expansion
 
 - **FUTR-01**: Developer can customize notification and workspace-metadata presentation more deeply after the core control plane is stable.
@@ -109,10 +116,14 @@
 | UI-03 | Phase 6 | Complete |
 | UI-04 | Phase 6 | Complete |
 | UI-05 | Phase 6 | Complete |
+| POLISH-01 | Phase 7 | Complete |
+| POLISH-02 | Phase 7 | Complete |
+| POLISH-03 | Phase 7 | Complete |
+| POLISH-04 | Phase 7 | Complete |
 
 **Coverage:**
-- v1/v2 requirements: 31 total
-- Mapped to phases: 31
+- v1/v2 requirements: 35 total
+- Mapped to phases: 35
 - Unmapped: 0 ✓
 
 ---
