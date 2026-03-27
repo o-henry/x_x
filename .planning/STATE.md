@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-hardening-and-compatibility-01-PLAN.md
-last_updated: "2026-03-27T10:41:06.555Z"
+stopped_at: Completed 05-hardening-and-compatibility-02-PLAN.md
+last_updated: "2026-03-27T10:59:31.132Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 24
-  completed_plans: 21
-  percent: 0
+  completed_plans: 22
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 05 (hardening-and-compatibility) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-03-27
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-workspace-metadata-plane P04 | 16min | 2 tasks | 4 files |
 | Phase 02-workspace-metadata-plane P03 | 25 min | 2 tasks | 9 files |
 | Phase 05-hardening-and-compatibility P01 | 5min | 2 tasks | 2 files |
+| Phase 05-hardening-and-compatibility P02 | 15min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 - [Phase 02-workspace-metadata-plane]: Mutation commands print only stable payload fields instead of transport wrapper keys so machine consumers see the exact documented contract.
 - [Phase 02-workspace-metadata-plane]: Workspace metadata list commands reuse CliOutputFormatKind and explicit table columns to keep JSON/table contracts aligned with existing Kaku CLI patterns.
 - [Phase 05-hardening-and-compatibility]: Preserve the last known working directory on immediate task-pane failures so list-task-panes and rerun validation keep usable lifecycle context.
+- [Phase 05]: Dead task-pane records are retained only for explicit lifecycle reasons: remain-on-exit, failure, or rerun metadata.
+- [Phase 05]: Remote lifecycle consumers resync on a typed TaskPaneChanged transport event instead of inferring refresh timing.
+- [Phase 05]: The stable respawn status string is respawn, and the CLI rejects unexpected rerun and respawn status values.
 
 ### Pending Todos
 
@@ -80,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T10:41:06.548Z
-Stopped at: Completed 05-hardening-and-compatibility-01-PLAN.md
+Last session: 2026-03-27T10:59:31.126Z
+Stopped at: Completed 05-hardening-and-compatibility-02-PLAN.md
 Resume file: None
