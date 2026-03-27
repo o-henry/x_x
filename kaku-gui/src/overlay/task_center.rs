@@ -1049,6 +1049,60 @@ impl TaskCenterOverlay {
     fn header_lines_for_test(&self) -> Vec<String> {
         self.header_lines().to_vec()
     }
+
+    #[cfg(test)]
+    fn set_visible_rows_for_test(&mut self, visible_rows: usize) {
+        self.max_items = visible_rows.max(1);
+    }
+
+    #[cfg(test)]
+    fn handle_mouse_for_test(&mut self, x: usize, y: usize, mouse_buttons: MouseButtons) -> bool {
+        self.handle_list_mouse_event(MouseEvent {
+            x: x as u16,
+            y: y as u16,
+            mouse_buttons,
+            modifiers: Modifiers::NONE,
+        })
+    }
+
+    #[cfg(test)]
+    fn selected_label_for_test(&self) -> Option<&str> {
+        self.filtered_entries
+            .get(self.active_idx)
+            .map(|entry| entry.label.as_str())
+    }
+
+    #[cfg(test)]
+    fn top_row_for_test(&self) -> usize {
+        self.top_row
+    }
+
+    #[cfg(test)]
+    fn action_x_for_test(&self, action: RowAction) -> Option<usize> {
+        let entry = self.filtered_entries.get(self.active_idx)?;
+        let layout = Self::row_layout(entry, true);
+        layout
+            .action_targets
+            .into_iter()
+            .find(|target| target.action == action)
+            .map(|target| target.start)
+    }
+
+    #[cfg(test)]
+    fn mode_name_for_test(&self) -> &'static str {
+        match self.mode {
+            OverlayMode::List => "list",
+            OverlayMode::Prompt(PromptState {
+                kind: PromptKind::Status,
+                ..
+            }) => "prompt:status",
+            OverlayMode::Prompt(PromptState {
+                kind: PromptKind::Progress,
+                ..
+            }) => "prompt:progress",
+            OverlayMode::Confirm(_) => "confirm",
+        }
+    }
 }
 
 pub fn task_center(
@@ -1086,8 +1140,9 @@ fn parse_kind(input: &str) -> Option<TaskCenterKind> {
 
 #[cfg(test)]
 mod tests {
-    use super::{task_center, TaskCenterOverlay};
+    use super::{task_center, RowAction, TaskCenterOverlay, ROW_START_Y};
     use mux::task_center::{TaskCenterEntry, TaskCenterKind, TaskCenterSource};
+    use termwiz::input::MouseButtons;
 
     fn entry(
         label: &str,
