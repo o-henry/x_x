@@ -549,6 +549,7 @@ pdu! {
     SilenceWatchdogResponse: 103,
     PipePane: 104,
     PipePaneResponse: 105,
+    TaskPaneChanged: 106,
 }
 
 impl Pdu {
@@ -643,6 +644,7 @@ impl Pdu {
             | Pdu::SetClipboard(SetClipboard { pane_id, .. })
             | Pdu::PaneFocused(PaneFocused { pane_id })
             | Pdu::PaneRemoved(PaneRemoved { pane_id }) => Some(*pane_id),
+            Pdu::TaskPaneChanged(TaskPaneChanged { pane_id }) => Some(*pane_id),
             _ => None,
         }
     }
@@ -1192,6 +1194,11 @@ pub struct PipePane {
 pub struct PipePaneResponse {
     pub pane_id: PaneId,
     pub tee_path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct TaskPaneChanged {
+    pub pane_id: PaneId,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug)]

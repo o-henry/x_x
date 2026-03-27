@@ -1650,7 +1650,9 @@ impl Mux {
         };
 
         if !remain_on_exit && !is_failed && rerun.is_empty() {
-            self.task_panes.write().remove_task_pane(pane_id);
+            if self.task_panes.write().remove_task_pane(pane_id) {
+                self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+            }
             return None;
         }
 
@@ -1678,6 +1680,7 @@ impl Mux {
         remain_on_exit: bool,
     ) -> Option<TaskPaneRecord> {
         let pane = self.get_pane(pane_id)?;
+        let existing = self.task_panes.read().task_pane(pane_id);
         let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
         let silenced = self
             .task_panes
@@ -1700,7 +1703,13 @@ impl Mux {
         let user_vars = pane.copy_user_vars();
         let rerun = rerun_metadata_from_user_vars(&user_vars);
         let record = task_panes.refresh_live_metadata(pane_id, current_working_dir, rerun)?;
-        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        let changed = existing
+            .as_ref()
+            .map(|prior| !Self::same_task_pane_contract(prior, &record))
+            .unwrap_or(true);
+        if changed {
+            self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        }
         Some(record)
     }
 
@@ -1715,19 +1724,25 @@ impl Mux {
         silenced: bool,
     ) -> Option<TaskPaneRecord> {
         let existing = self.task_panes.read().task_pane(pane_id);
-        let record = if existing.is_some() {
+        let (record, changed) = if existing.is_some() {
             let mut task_panes = self.task_panes.write();
-            task_panes.set_silenced(pane_id, silenced);
-            task_panes.task_pane(pane_id)
+            let changed = task_panes.set_silenced(pane_id, silenced);
+            (task_panes.task_pane(pane_id), changed)
         } else {
             let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
-            Some(
-                self.task_panes
-                    .write()
-                    .upsert_live(pane_id, workspace, window_id, tab_id, false, silenced),
+            (
+                Some(
+                    self.task_panes
+                        .write()
+                        .upsert_live(pane_id, workspace, window_id, tab_id, false, silenced),
+                ),
+                true,
             )
-        }?;
-        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        };
+        let record = record?;
+        if changed {
+            self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        }
         Some(record)
     }
 
@@ -1737,10 +1752,10 @@ impl Mux {
         tee_path: Option<String>,
     ) -> Option<TaskPaneRecord> {
         let existing = self.task_panes.read().task_pane(pane_id);
-        let record = if existing.is_some() {
+        let (record, changed) = if existing.is_some() {
             let mut task_panes = self.task_panes.write();
-            task_panes.set_tee_path(pane_id, tee_path);
-            task_panes.task_pane(pane_id)
+            let changed = task_panes.set_tee_path(pane_id, tee_path);
+            (task_panes.task_pane(pane_id), changed)
         } else {
             let pane = self.get_pane(pane_id)?;
             let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
@@ -1762,9 +1777,12 @@ impl Mux {
             let rerun = rerun_metadata_from_user_vars(&user_vars);
             let _ = task_panes.refresh_live_metadata(pane_id, current_working_dir, rerun);
             let _ = task_panes.set_tee_path(pane_id, tee_path);
-            task_panes.task_pane(pane_id)
-        }?;
-        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+            (task_panes.task_pane(pane_id), true)
+        };
+        let record = record?;
+        if changed {
+            self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        }
         Some(record)
     }
 
@@ -1784,6 +1802,21 @@ impl Mux {
             }
         }
         Some(path.to_string())
+    }
+
+    fn same_task_pane_contract(lhs: &TaskPaneRecord, rhs: &TaskPaneRecord) -> bool {
+        lhs.pane_id == rhs.pane_id
+            && lhs.workspace == rhs.workspace
+            && lhs.window_id == rhs.window_id
+            && lhs.tab_id == rhs.tab_id
+            && lhs.remain_on_exit == rhs.remain_on_exit
+            && lhs.silenced == rhs.silenced
+            && lhs.is_dead == rhs.is_dead
+            && lhs.is_failed == rhs.is_failed
+            && lhs.exit_behavior == rhs.exit_behavior
+            && lhs.current_working_dir == rhs.current_working_dir
+            && lhs.rerun == rhs.rerun
+            && lhs.tee_path == rhs.tee_path
     }
 
     fn task_pane_rerun_command(record: &TaskPaneRecord) -> Option<String> {
@@ -2674,10 +2707,7 @@ mod tests {
         );
         assert_eq!(mux.list_task_panes().len(), 1);
 
-        {
-            let mut task_panes = mux.task_panes.write();
-            assert_eq!(task_panes.prune_missing(&HashSet::new()), 1);
-        }
+        assert!(mux.task_panes.write().remove_task_pane(pane_id));
         assert!(mux.task_pane_record(pane_id).is_none());
     }
 
@@ -2718,5 +2748,48 @@ mod tests {
             record.current_working_dir.as_deref(),
             Some("file:///tmp/immediate-failure")
         );
+    }
+
+    #[test]
+    fn task_pane_clean_exit_removal_still_emits_lifecycle_refresh() {
+        let mux = Mux::new(None);
+        let pane_id = PaneId::new(88);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&events);
+        mux.subscribe(move |notification| {
+            captured.lock().push(notification);
+            true
+        });
+
+        {
+            let mut task_panes = mux.task_panes.write();
+            task_panes.upsert_live(
+                pane_id,
+                Some("unity-main".to_string()),
+                Some(1),
+                Some(TabId::new(2)),
+                false,
+                false,
+            );
+        }
+        events.lock().clear();
+
+        let record = mux.record_task_pane_exit(
+            pane_id,
+            ExitBehavior::CloseOnCleanExit,
+            true,
+            false,
+            Some("file:///tmp/unity-main".to_string()),
+            &HashMap::new(),
+        );
+
+        assert!(
+            record.is_none(),
+            "clean exits without retention should be dropped"
+        );
+        let events = events.lock();
+        assert!(events.iter().any(
+            |event| matches!(event, MuxNotification::TaskPaneLifecycleChanged(target) if *target == pane_id)
+        ));
     }
 }

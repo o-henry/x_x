@@ -204,6 +204,12 @@ where
             }
             Ok(Item::Notif(MuxNotification::NotificationsChanged)) => {}
             Ok(Item::Notif(MuxNotification::WorkspaceMetadataChanged)) => {}
+            Ok(Item::Notif(MuxNotification::TaskPaneLifecycleChanged(pane_id))) => {
+                Pdu::TaskPaneChanged(codec::TaskPaneChanged { pane_id })
+                    .encode_async(&mut stream, 0)
+                    .await?;
+                stream.flush().await.context("flushing PDU to client")?;
+            }
             Ok(Item::Notif(MuxNotification::ActiveWorkspaceChanged(_))) => {}
             Ok(Item::Notif(MuxNotification::Empty)) => {}
             Err(err) => {

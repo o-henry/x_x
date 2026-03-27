@@ -297,7 +297,7 @@ fn process_unilateral(
             .detach();
             return Ok(());
         }
-        Pdu::TabResized(_) | Pdu::TabAddedToWindow(_) => {
+        Pdu::TabResized(_) | Pdu::TabAddedToWindow(_) | Pdu::TaskPaneChanged(_) => {
             log::trace!("resync due to {:?}", decoded.pdu);
             promise::spawn::spawn_into_main_thread(async move {
                 let mux = Mux::try_get().ok_or_else(|| anyhow!("no more mux"))?;
@@ -1389,4 +1389,86 @@ impl Client {
         GetPaneDirectionResponse
     );
     rpc!(adjust_pane_size, AdjustPaneSize, UnitResponse);
+    rpc!(
+        create_notification,
+        CreateNotification,
+        CreateNotificationResponse
+    );
+    rpc!(
+        list_notifications,
+        ListNotifications,
+        ListNotificationsResponse
+    );
+    rpc!(
+        clear_notifications,
+        ClearNotifications,
+        ClearNotificationsResponse
+    );
+    rpc!(
+        mark_notifications_read,
+        MarkNotificationsRead,
+        MarkNotificationsResponse
+    );
+    rpc!(
+        mark_notifications_unread,
+        MarkNotificationsUnread,
+        MarkNotificationsResponse
+    );
+    rpc!(jump_unread, JumpUnread, JumpUnreadResponse);
+    rpc!(
+        identify_notification_target,
+        IdentifyNotificationTarget,
+        IdentifyNotificationTargetResponse
+    );
+    rpc!(
+        get_notification_capabilities,
+        GetNotificationCapabilities = (),
+        GetNotificationCapabilitiesResponse
+    );
+    rpc!(
+        set_workspace_status,
+        SetWorkspaceStatus,
+        SetWorkspaceStatusResponse
+    );
+    rpc!(
+        clear_workspace_status,
+        ClearWorkspaceStatus,
+        ClearWorkspaceStatusResponse
+    );
+    rpc!(
+        list_workspace_status,
+        ListWorkspaceStatus,
+        ListWorkspaceStatusResponse
+    );
+    rpc!(
+        set_workspace_progress,
+        SetWorkspaceProgress,
+        SetWorkspaceProgressResponse
+    );
+    rpc!(
+        clear_workspace_progress,
+        ClearWorkspaceProgress,
+        ClearWorkspaceProgressResponse
+    );
+    rpc!(
+        append_workspace_log,
+        AppendWorkspaceLog,
+        AppendWorkspaceLogResponse
+    );
+    rpc!(
+        clear_workspace_log,
+        ClearWorkspaceLog,
+        ClearWorkspaceLogResponse
+    );
+    rpc!(
+        list_workspace_log,
+        ListWorkspaceLog,
+        ListWorkspaceLogResponse
+    );
+    rpc!(list_task_panes, ListTaskPanes, ListTaskPanesResponse);
+    rpc!(set_remain_on_exit, SetRemainOnExit, SetRemainOnExitResponse);
+    rpc!(rerun_pane, RerunPane, RerunPaneResponse);
+    rpc!(respawn_pane, RespawnPane, RespawnPaneResponse);
+    rpc!(silence_watchdog, SilenceWatchdog, SilenceWatchdogResponse);
+    rpc!(pipe_pane, PipePane, PipePaneResponse);
 }

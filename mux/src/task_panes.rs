@@ -25,6 +25,12 @@ pub struct TaskPaneRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+impl TaskPaneRecord {
+    pub fn should_retain_without_live_pane(&self) -> bool {
+        self.is_dead && (self.remain_on_exit || self.is_failed || !self.rerun.is_empty())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TaskPaneExitRecord {
     pub pane_id: PaneId,
@@ -88,21 +94,25 @@ impl TaskPaneStore {
         remain_on_exit: bool,
         silenced: bool,
     ) -> TaskPaneRecord {
-        let mut record = self.records.get(&pane_id).cloned().unwrap_or(TaskPaneRecord {
-            pane_id,
-            workspace: None,
-            window_id: None,
-            tab_id: None,
-            remain_on_exit: false,
-            silenced: false,
-            is_dead: false,
-            is_failed: false,
-            exit_behavior: None,
-            current_working_dir: None,
-            rerun: HashMap::new(),
-            tee_path: None,
-            updated_at: utc_now(),
-        });
+        let mut record = self
+            .records
+            .get(&pane_id)
+            .cloned()
+            .unwrap_or(TaskPaneRecord {
+                pane_id,
+                workspace: None,
+                window_id: None,
+                tab_id: None,
+                remain_on_exit: false,
+                silenced: false,
+                is_dead: false,
+                is_failed: false,
+                exit_behavior: None,
+                current_working_dir: None,
+                rerun: HashMap::new(),
+                tee_path: None,
+                updated_at: utc_now(),
+            });
 
         record.workspace = workspace;
         record.window_id = window_id;
@@ -170,13 +180,16 @@ impl TaskPaneStore {
 
     pub fn prune_missing(&mut self, live_panes: &HashSet<PaneId>) -> usize {
         let before = self.records.len();
-        self.records
-            .retain(|pane_id, _| live_panes.contains(pane_id));
+        self.records.retain(|pane_id, record| {
+            live_panes.contains(pane_id) || record.should_retain_without_live_pane()
+        });
         before.saturating_sub(self.records.len())
     }
 }
 
-pub fn rerun_metadata_from_user_vars(user_vars: &HashMap<String, String>) -> HashMap<String, String> {
+pub fn rerun_metadata_from_user_vars(
+    user_vars: &HashMap<String, String>,
+) -> HashMap<String, String> {
     let mut rerun = user_vars
         .iter()
         .filter(|(key, _)| is_rerun_user_var(key))
@@ -260,7 +273,10 @@ mod tests {
         assert!(record.is_dead);
         assert!(record.is_failed);
         assert_eq!(record.exit_behavior.as_deref(), Some("Hold"));
-        assert_eq!(record.current_working_dir.as_deref(), Some("file:///tmp/project"));
+        assert_eq!(
+            record.current_working_dir.as_deref(),
+            Some("file:///tmp/project")
+        );
         assert_eq!(record.rerun, rerun);
     }
 
@@ -307,19 +323,25 @@ mod tests {
         let first = PaneId::new(1);
         let second = PaneId::new(2);
 
-        for pane_id in [first, second] {
-            store.record_exit(TaskPaneExitRecord {
-                pane_id,
-                workspace: Some("default".to_string()),
-                window_id: Some(0),
-                tab_id: Some(TabId::new(0)),
-                remain_on_exit: false,
-                is_failed: true,
-                exit_behavior: ExitBehavior::CloseOnCleanExit,
-                current_working_dir: None,
-                rerun: HashMap::new(),
-            });
-        }
+        store.upsert_live(
+            first,
+            Some("default".to_string()),
+            Some(0),
+            Some(TabId::new(0)),
+            false,
+            false,
+        );
+        store.record_exit(TaskPaneExitRecord {
+            pane_id: second,
+            workspace: Some("default".to_string()),
+            window_id: Some(0),
+            tab_id: Some(TabId::new(0)),
+            remain_on_exit: false,
+            is_failed: true,
+            exit_behavior: ExitBehavior::CloseOnCleanExit,
+            current_working_dir: None,
+            rerun: HashMap::new(),
+        });
 
         let mut live = HashSet::new();
         live.insert(second);
@@ -372,7 +394,10 @@ mod tests {
         );
 
         assert_eq!(store.prune_missing(&HashSet::new()), 1);
-        assert!(store.task_pane(failed).is_some(), "failed panes should be retained");
+        assert!(
+            store.task_pane(failed).is_some(),
+            "failed panes should be retained"
+        );
         assert!(
             store.task_pane(rerunnable).is_some(),
             "rerunnable panes should be retained"
@@ -407,11 +432,8 @@ mod tests {
 
     #[test]
     fn rerun_metadata_filter_keeps_only_rerun_env_keys() {
-        let mut cmd = CommandBuilder::from_argv(vec![
-            "/bin/sh".into(),
-            "-lc".into(),
-            "false".into(),
-        ]);
+        let mut cmd =
+            CommandBuilder::from_argv(vec!["/bin/sh".into(), "-lc".into(), "false".into()]);
         cmd.env("KAKU_RERUN_COMMAND", "cargo test");
         cmd.env("kaku.rerun.payload", "{\"a\":1}");
         cmd.env("TERM", "xterm-256color");
