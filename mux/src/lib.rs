@@ -1872,7 +1872,7 @@ impl Mux {
     }
 
     pub async fn respawn_task_pane(&self, pane_id: PaneId) -> anyhow::Result<(PaneId, String)> {
-        self.spawn_task_pane_from_record(pane_id, "respawned").await
+        self.spawn_task_pane_from_record(pane_id, "respawn").await
     }
 
     pub fn task_center_snapshot(&self) -> Vec<TaskCenterEntry> {

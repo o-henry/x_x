@@ -19,6 +19,12 @@ impl RespawnPaneCommand {
     }
 
     fn render_json(response: &RespawnPaneResponse) -> anyhow::Result<String> {
+        anyhow::ensure!(
+            response.status == "respawn",
+            "unexpected respawn-pane status `{}`",
+            response.status
+        );
+
         #[derive(Serialize)]
         struct Output<'a> {
             pane_id: PaneId,

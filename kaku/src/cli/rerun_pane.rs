@@ -19,6 +19,12 @@ impl RerunPaneCommand {
     }
 
     fn render_json(response: &RerunPaneResponse) -> anyhow::Result<String> {
+        anyhow::ensure!(
+            response.status == "rerun",
+            "unexpected rerun-pane status `{}`",
+            response.status
+        );
+
         #[derive(Serialize)]
         struct Output<'a> {
             pane_id: PaneId,
