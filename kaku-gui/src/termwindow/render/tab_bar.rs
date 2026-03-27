@@ -1,5 +1,5 @@
 use crate::quad::TripleLayerQuadAllocator;
-use crate::termwindow::render::{RenderScreenLineParams, forces_opaque_kaku_tui_window_background};
+use crate::termwindow::render::{forces_opaque_kaku_tui_window_background, RenderScreenLineParams};
 use crate::utilsprites::RenderMetrics;
 use config::ConfigHandle;
 use mux::renderable::RenderableDimensions;
@@ -209,5 +209,4 @@ mod tests {
             (font.metrics().cell_height.get() as f32 * FANCY_TAB_BAR_HEIGHT_MULTIPLIER).ceil()
         );
     }
-
 }

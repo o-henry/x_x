@@ -10,8 +10,8 @@ use crate::utilsprites::RenderMetrics;
 use config::{Dimension, DimensionContext, TabBarColors};
 use std::rc::Rc;
 use wezterm_font::LoadedFont;
-use wezterm_term::Progress;
 use wezterm_term::color::{ColorAttribute, ColorPalette};
+use wezterm_term::Progress;
 use window::{IntegratedTitleButtonAlignment, IntegratedTitleButtonStyle};
 
 const X_BUTTON: &[Poly] = &[
