@@ -30,6 +30,7 @@ use crate::termwindow::webgpu::WebGpuState;
 use ::wezterm_term::input::{ClickPosition, MouseButton as TMB};
 use ::window::*;
 use anyhow::{anyhow, ensure, Context};
+use codec::{ListWorkspaceStatus, WorkspaceStatusState};
 use config::keyassignment::{
     Confirmation, KeyAssignment, LauncherActionArgs, PaneDirection, PaneEncoding, Pattern,
     PromptInputLine, QuickSelectArguments, RotationDirection, SpawnCommand, SplitSize,
@@ -49,6 +50,7 @@ use mux::tab::{
     PositionedPane, PositionedSplit, SplitDirection, SplitRequest, SplitSize as MuxSplitSize, Tab,
     TabId,
 };
+use mux::task_center::TaskCenterEntry;
 use mux::window::WindowId as MuxWindowId;
 use mux::{Mux, MuxNotification};
 use mux_lua::MuxPane;
@@ -65,6 +67,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use termwiz::hyperlink::Hyperlink;
 use termwiz::surface::SequenceNo;
+use wezterm_client::domain::ClientDomain;
 use wezterm_dynamic::Value;
 use wezterm_font::units::PixelLength;
 use wezterm_font::FontConfiguration;
@@ -819,6 +822,9 @@ pub struct TermWindow {
     fancy_tab_bar: Option<box_model::ComputedElement>,
     pub right_status: String,
     pub left_status: String,
+    workspace_status_cache: HashMap<String, String>,
+    workspace_progress_cache: HashMap<String, u8>,
+    task_center_cache: Vec<TaskCenterEntry>,
     last_ui_item: Option<UIItem>,
     /// Tracks whether the current mouse-down event is part of click-focus.
     /// If so, we ignore mouse events until released
@@ -1375,6 +1381,9 @@ impl TermWindow {
             fancy_tab_bar: None,
             right_status: String::new(),
             left_status: String::new(),
+            workspace_status_cache: HashMap::new(),
+            workspace_progress_cache: HashMap::new(),
+            task_center_cache: Vec::new(),
             last_mouse_coords: (0, -1),
             window_drag_position: None,
             edge_drag_in_progress: false,
@@ -1519,6 +1528,7 @@ impl TermWindow {
 
         // These run after show — they don't affect window visibility.
         Self::apply_icon(&window)?;
+        tw.borrow().refresh_workspace_metadata_cache();
 
         let config_subscription = config::subscribe_to_config_reload({
             let window = window.clone();
@@ -2076,11 +2086,18 @@ impl TermWindow {
                     self.update_title_post_status();
                 }
                 MuxNotification::NotificationsChanged => {
+                    self.refresh_task_center_cache();
                     self.update_title_post_status();
                 }
                 MuxNotification::WorkspaceMetadataChanged => {
+                    self.refresh_workspace_metadata_cache();
+                    self.refresh_task_center_cache();
                     self.emit_status_event();
                     self.update_title();
+                }
+                MuxNotification::TaskPaneLifecycleChanged(_) => {
+                    self.refresh_task_center_cache();
+                    self.update_title_post_status();
                 }
                 MuxNotification::TabResized(_) => {
                     // Also handled by wezterm-client
@@ -2135,6 +2152,7 @@ impl TermWindow {
                         tab.resize(self.terminal_size);
                     }
                 };
+                self.refresh_task_center_cache();
                 self.update_title();
                 window.invalidate();
             }
@@ -2359,7 +2377,9 @@ impl TermWindow {
                         }
                     }
                 }
-                MuxNotification::NotificationsChanged | MuxNotification::WorkspaceMetadataChanged => {}
+                MuxNotification::NotificationsChanged
+                | MuxNotification::WorkspaceMetadataChanged
+                | MuxNotification::TaskPaneLifecycleChanged(_) => {}
                 // Global notifications not relevant to individual windows
                 MuxNotification::AssignClipboard { .. }
                 | MuxNotification::SaveToDownloads { .. }
@@ -2396,6 +2416,7 @@ impl TermWindow {
                 | MuxNotification::WindowInvalidated(_)
                 | MuxNotification::NotificationsChanged
                 | MuxNotification::WorkspaceMetadataChanged
+                | MuxNotification::TaskPaneLifecycleChanged(_)
         )
     }
 
@@ -2537,12 +2558,14 @@ impl TermWindow {
     /// fullscreen state, and config.
     fn should_show_tab_bar(&self, num_tabs: usize) -> bool {
         let has_unread_notifications = self.window_has_unread_notifications();
+        let has_workspace_metadata = self.window_has_workspace_metadata();
         Self::should_show_tab_bar_impl(
             self.config.enable_tab_bar,
             self.config.hide_tab_bar_if_only_one_tab,
             self.layout_is_effective_fullscreen(),
             num_tabs,
             has_unread_notifications,
+            has_workspace_metadata,
         )
     }
 
@@ -2558,18 +2581,32 @@ impl TermWindow {
         has_unread_notifications
     }
 
+    fn window_has_workspace_metadata(&self) -> bool {
+        let mux = Mux::get();
+        let Some(window) = mux.get_window(self.mux_window_id) else {
+            return false;
+        };
+        let workspace = window.get_workspace().to_string();
+
+        mux.workspace_status_for_workspace(&workspace).is_some()
+            || mux.workspace_progress_for_workspace(&workspace).is_some()
+            || self.workspace_status_cache.contains_key(&workspace)
+            || self.workspace_progress_cache.contains_key(&workspace)
+    }
+
     fn should_show_tab_bar_impl(
         enable_tab_bar: bool,
         hide_tab_bar_if_only_one_tab: bool,
         is_full_screen: bool,
         num_tabs: usize,
         has_unread_notifications: bool,
+        has_workspace_metadata: bool,
     ) -> bool {
         if !enable_tab_bar {
             return false;
         }
 
-        if is_full_screen || has_unread_notifications {
+        if is_full_screen || has_unread_notifications || has_workspace_metadata {
             return true;
         }
 
@@ -2986,6 +3023,240 @@ impl TermWindow {
     /// to update the right-status.
     fn update_title(&mut self) {
         self.schedule_status_update();
+        self.update_title_impl();
+    }
+
+    fn active_client_domain_id(&self) -> Option<mux::domain::DomainId> {
+        let mux = Mux::get();
+        let tab = mux.get_active_tab_for_window(self.mux_window_id)?;
+        let pane = tab.get_active_pane()?;
+        Some(pane.domain_id())
+    }
+
+    pub(crate) fn task_center_entries(&mut self) -> Vec<TaskCenterEntry> {
+        if self.task_center_cache.is_empty() {
+            self.refresh_task_center_cache();
+        }
+        self.task_center_cache.clone()
+    }
+
+    fn refresh_task_center_cache(&mut self) {
+        self.task_center_cache = Mux::get().task_center_snapshot();
+    }
+
+    fn task_center_target_window_id(
+        entry: &TaskCenterEntry,
+        current_window_id: MuxWindowId,
+        current_workspace: Option<&str>,
+        workspace_window_ids: &[MuxWindowId],
+    ) -> Option<MuxWindowId> {
+        entry
+            .window_id
+            .or_else(|| {
+                current_workspace
+                    .filter(|workspace| *workspace == entry.workspace)
+                    .map(|_| current_window_id)
+            })
+            .or_else(|| workspace_window_ids.first().copied())
+    }
+
+    fn task_center_notification_ids(entry: &TaskCenterEntry) -> Vec<String> {
+        entry.notification_ids.clone()
+    }
+
+    pub(crate) fn rerun_task_center_entry(&self, entry: &TaskCenterEntry) -> bool {
+        if !entry.is_failed || !entry.rerun_available {
+            return false;
+        }
+
+        let Some(pane_id) = entry.pane_id else {
+            return false;
+        };
+
+        let mux = Mux::get();
+        let record = mux.task_pane_record(pane_id);
+        let pane = mux.get_pane(pane_id);
+        let command = record
+            .as_ref()
+            .and_then(|record| {
+                record
+                    .rerun
+                    .get("KAKU_RERUN_COMMAND")
+                    .or_else(|| record.rerun.get("kaku.rerun.command"))
+                    .cloned()
+            })
+            .or_else(|| {
+                pane.as_ref().and_then(|pane| {
+                    let user_vars = pane.copy_user_vars();
+                    user_vars
+                        .get("KAKU_RERUN_COMMAND")
+                        .or_else(|| user_vars.get("kaku.rerun.command"))
+                        .cloned()
+                })
+            });
+        let Some(command) = command else {
+            return false;
+        };
+
+        let cwd = record
+            .as_ref()
+            .and_then(|record| record.current_working_dir.as_deref())
+            .and_then(|value| url::Url::parse(value).ok())
+            .and_then(|url| url.to_file_path().ok())
+            .or_else(|| {
+                pane.as_ref().and_then(|pane| {
+                    pane.get_current_working_dir(CachePolicy::AllowStale)
+                        .and_then(|url| url.to_file_path().ok())
+                })
+            });
+
+        self.spawn_command(
+            &SpawnCommand {
+                label: Some(format!("Rerun {}", entry.label)),
+                args: Some(vec!["/bin/sh".to_string(), "-lc".to_string(), command]),
+                cwd,
+                set_environment_variables: HashMap::new(),
+                domain: config::keyassignment::SpawnTabDomain::CurrentPaneDomain,
+                encoding: None,
+                position: None,
+            },
+            SpawnWhere::NewTab,
+        );
+        true
+    }
+
+    pub(crate) fn clear_task_center_entry_unread(&mut self, entry: &TaskCenterEntry) -> usize {
+        let notification_ids = Self::task_center_notification_ids(entry);
+        if notification_ids.is_empty() {
+            return 0;
+        }
+
+        let updated = Mux::get().mark_notifications_read(&notification_ids);
+        if updated > 0 {
+            self.refresh_task_center_cache();
+            self.update_title_post_status();
+        }
+        updated
+    }
+
+    pub(crate) fn focus_task_center_entry(
+        &mut self,
+        entry: &TaskCenterEntry,
+    ) -> anyhow::Result<()> {
+        let mux = Mux::get();
+        let current_workspace = mux
+            .get_window(self.mux_window_id)
+            .map(|window| window.get_workspace().to_string());
+        let workspace_window_ids = mux.iter_windows_in_workspace(&entry.workspace);
+        let target_window_id = Self::task_center_target_window_id(
+            entry,
+            self.mux_window_id,
+            current_workspace.as_deref(),
+            &workspace_window_ids,
+        )
+        .ok_or_else(|| {
+            anyhow!(
+                "no target window available for workspace {}",
+                entry.workspace
+            )
+        })?;
+
+        let target_tab_id = entry.tab_id.or_else(|| {
+            entry
+                .pane_id
+                .and_then(|pane_id| mux.resolve_pane_id(pane_id).map(|(_, _, tab_id)| tab_id))
+        });
+
+        if let Some(tab_id) = target_tab_id {
+            let mut target_window = mux
+                .get_window_mut(target_window_id)
+                .ok_or_else(|| anyhow!("no such mux window {}", target_window_id))?;
+            let tab_idx = target_window.iter().position(|tab| tab.tab_id() == tab_id);
+            if let Some(tab_idx) = tab_idx {
+                target_window.save_and_then_set_active(tab_idx);
+            }
+        }
+
+        if let Some(pane_id) = entry.pane_id {
+            let (_, pane_window_id, tab_id) = mux
+                .resolve_pane_id(pane_id)
+                .ok_or_else(|| anyhow!("pane {} is not available", pane_id))?;
+            ensure!(
+                pane_window_id == target_window_id,
+                "pane {} does not belong to target window {}",
+                pane_id,
+                target_window_id
+            );
+            let tab = mux
+                .get_tab(tab_id)
+                .ok_or_else(|| anyhow!("tab {} is not available", tab_id))?;
+            if let Some(pane_index) = tab
+                .iter_panes()
+                .iter()
+                .position(|positioned| positioned.pane.pane_id() == pane_id)
+            {
+                tab.set_active_idx(pane_index);
+            }
+        }
+
+        if target_window_id != self.mux_window_id {
+            let gui_window = front_end()
+                .gui_window_for_mux_window(target_window_id)
+                .ok_or_else(|| anyhow!("no gui window for mux window {}", target_window_id))?;
+            gui_window
+                .window
+                .notify(TermWindowNotif::SwitchToMuxWindow(target_window_id));
+            gui_window.window.focus();
+            return Ok(());
+        }
+
+        if let Some(active) = self.get_active_pane_or_overlay() {
+            active.focus_changed(true);
+        }
+        self.refresh_task_center_cache();
+        self.update_title();
+        self.update_scrollbar();
+        Ok(())
+    }
+
+    fn refresh_workspace_metadata_cache(&self) {
+        let Some(window) = self.window.clone() else {
+            return;
+        };
+        let Some(domain_id) = self.active_client_domain_id() else {
+            return;
+        };
+
+        promise::spawn::spawn(async move {
+            let inner = match ClientDomain::get_client_inner_for_domain(domain_id) {
+                Ok(inner) => inner,
+                Err(_) => return,
+            };
+
+            let statuses = match inner
+                .client
+                .list_workspace_status(ListWorkspaceStatus { workspace: None })
+                .await
+            {
+                Ok(response) => response.statuses,
+                Err(err) => {
+                    log::debug!("refresh_workspace_metadata_cache status query failed: {err:#}");
+                    return;
+                }
+            };
+
+            window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                term_window.apply_workspace_metadata_cache(statuses);
+            })));
+        })
+        .detach();
+    }
+
+    fn apply_workspace_metadata_cache(&mut self, statuses: Vec<WorkspaceStatusState>) {
+        self.workspace_status_cache = statuses
+            .into_iter()
+            .map(|record| (record.workspace, record.status))
+            .collect();
         self.update_title_impl();
     }
 
@@ -3488,6 +3759,22 @@ impl TermWindow {
         self.show_launcher_impl(args, 0);
     }
 
+    fn show_task_center(&mut self) {
+        let mux = Mux::get();
+        let Some(tab) = mux.get_active_tab_for_window(self.mux_window_id) else {
+            return;
+        };
+        let Some(window) = self.window.clone() else {
+            return;
+        };
+        let entries = self.task_center_entries();
+        let (overlay, future) = start_overlay(self, &tab, move |_tab_id, term| {
+            crate::overlay::task_center::task_center(entries, term, window)
+        });
+        self.assign_overlay(tab.tab_id(), overlay);
+        promise::spawn::spawn(future).detach();
+    }
+
     fn show_launcher_impl(&mut self, args: LauncherActionArgs, initial_choice_idx: usize) {
         let mux_window_id = self.mux_window_id;
         let window = self.window.as_ref().unwrap().clone();
@@ -3919,6 +4206,7 @@ impl TermWindow {
             ShowDebugOverlay => {
                 crate::frontend::run_kaku_doctor_in_new_tab();
             }
+            ShowTaskCenter => self.show_task_center(),
             ShowLauncher => self.show_launcher(),
             ShowLauncherArgs(args) => {
                 let title = args.title.clone().unwrap_or("Launcher".to_string());
@@ -5345,10 +5633,12 @@ impl TermWindow {
                 let workspace = window.get_workspace();
                 let workspace_status = mux
                     .workspace_status_for_workspace(workspace)
-                    .map(|record| record.status);
+                    .map(|record| record.status)
+                    .or_else(|| self.workspace_status_cache.get(workspace).cloned());
                 let workspace_progress = mux
                     .workspace_progress_for_workspace(workspace)
-                    .map(|record| record.value);
+                    .map(|record| record.value)
+                    .or_else(|| self.workspace_progress_cache.get(workspace).copied());
 
                 TabInformation {
                     tab_index: idx,
@@ -5520,6 +5810,7 @@ mod tests {
     use super::{bell_notification_message, InputBroadcastMode, RenderableDimensions, TermWindow};
     use mlua::AnyUserDataExt;
     use mux::tab::TabId;
+    use mux::task_center::{TaskCenterEntry, TaskCenterKind, TaskCenterSource};
     use mux::MuxNotification;
     use wezterm_term::StableRowIndex;
 
@@ -5716,6 +6007,9 @@ mod tests {
         assert!(TermWindow::mux_notification_requires_tabbar_refresh(
             &MuxNotification::WorkspaceMetadataChanged
         ));
+        assert!(TermWindow::mux_notification_requires_tabbar_refresh(
+            &MuxNotification::TaskPaneLifecycleChanged(mux::pane::PaneId::new(9))
+        ));
         assert!(!TermWindow::mux_notification_requires_tabbar_refresh(
             &MuxNotification::Empty
         ));
@@ -5724,14 +6018,129 @@ mod tests {
     #[test]
     fn single_tab_with_unread_notifications_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, true
+            true, true, false, 1, true, false
         ));
     }
 
     #[test]
     fn single_tab_without_unread_notifications_still_respects_hide_setting() {
         assert!(!TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, false
+            true, true, false, 1, false, false
         ));
+    }
+
+    #[test]
+    fn single_tab_with_workspace_metadata_forces_tab_bar_visible() {
+        assert!(TermWindow::should_show_tab_bar_impl(
+            true, true, false, 1, false, true
+        ));
+    }
+
+    #[test]
+    fn task_center_focus_resolution_prefers_entry_window() {
+        let entry = TaskCenterEntry {
+            label: "Pane".to_string(),
+            workspace: "unity".to_string(),
+            source: TaskCenterSource::Pane,
+            kind: TaskCenterKind::Pane,
+            source_label: None,
+            kind_label: None,
+            window_id: Some(9),
+            tab_id: None,
+            pane_id: None,
+            unread_count: 0,
+            notification_ids: vec![],
+            is_failed: false,
+            is_running: false,
+            rerun_available: false,
+            workspace_status: None,
+            workspace_progress: None,
+        };
+
+        assert_eq!(
+            TermWindow::task_center_target_window_id(&entry, 1, Some("default"), &[3, 4]),
+            Some(9)
+        );
+    }
+
+    #[test]
+    fn task_center_focus_resolution_falls_back_to_current_workspace_window() {
+        let entry = TaskCenterEntry {
+            label: "Workspace".to_string(),
+            workspace: "default".to_string(),
+            source: TaskCenterSource::Workspace,
+            kind: TaskCenterKind::Workspace,
+            source_label: None,
+            kind_label: None,
+            window_id: None,
+            tab_id: None,
+            pane_id: None,
+            unread_count: 2,
+            notification_ids: vec!["n-1".to_string()],
+            is_failed: false,
+            is_running: false,
+            rerun_available: false,
+            workspace_status: Some("blocked".to_string()),
+            workspace_progress: Some(37),
+        };
+
+        assert_eq!(
+            TermWindow::task_center_target_window_id(&entry, 5, Some("default"), &[8, 9]),
+            Some(5)
+        );
+    }
+
+    #[test]
+    fn task_center_focus_resolution_falls_back_to_workspace_window_list() {
+        let entry = TaskCenterEntry {
+            label: "Workspace".to_string(),
+            workspace: "unity-main".to_string(),
+            source: TaskCenterSource::Workspace,
+            kind: TaskCenterKind::Workspace,
+            source_label: None,
+            kind_label: None,
+            window_id: None,
+            tab_id: None,
+            pane_id: None,
+            unread_count: 0,
+            notification_ids: vec![],
+            is_failed: false,
+            is_running: false,
+            rerun_available: false,
+            workspace_status: Some("running".to_string()),
+            workspace_progress: Some(80),
+        };
+
+        assert_eq!(
+            TermWindow::task_center_target_window_id(&entry, 5, Some("default"), &[8, 9]),
+            Some(8)
+        );
+    }
+
+    #[test]
+    fn task_center_notification_ids_follow_entry_data() {
+        let entry = TaskCenterEntry {
+            label: "Unread".to_string(),
+            workspace: "default".to_string(),
+            source: TaskCenterSource::Notification,
+            kind: TaskCenterKind::Notification,
+            source_label: Some("notification".to_string()),
+            kind_label: Some("build.failed".to_string()),
+            window_id: None,
+            tab_id: None,
+            pane_id: None,
+            unread_count: 2,
+            notification_ids: vec!["n-1".to_string(), "n-2".to_string()],
+            is_failed: false,
+            is_running: false,
+            rerun_available: false,
+            workspace_status: None,
+            workspace_progress: None,
+        };
+
+        assert_eq!(
+            TermWindow::task_center_notification_ids(&entry),
+            vec!["n-1".to_string(), "n-2".to_string()]
+        );
     }
 }
