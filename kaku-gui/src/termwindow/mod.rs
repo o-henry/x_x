@@ -241,8 +241,8 @@ const VSCODE_OPEN_CANDIDATES: &[&str] = &[
 ];
 
 const TOP_TAB_LAYOUT_FULLSCREEN_STICKY_MS: u64 = 160;
-const OPERATOR_NAV_WIDTH_PX: usize = 92;
-const OPERATOR_NAV_MIN_WINDOW_WIDTH: usize = 720;
+const OPERATOR_NAV_WIDTH_PX: usize = 72;
+const OPERATOR_NAV_MIN_WINDOW_WIDTH: usize = 680;
 
 #[derive(Clone, Debug)]
 struct FileLinkTarget {

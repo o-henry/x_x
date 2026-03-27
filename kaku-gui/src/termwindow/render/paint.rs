@@ -31,7 +31,8 @@ const OPERATOR_NAV_PANEL_BG: LinearRgba = LinearRgba::with_components(0.082, 0.0
 const OPERATOR_NAV_BORDER: LinearRgba = LinearRgba::with_components(0.88, 0.88, 0.96, 0.07);
 const OPERATOR_NAV_TEXT: LinearRgba = LinearRgba::with_components(0.82, 0.82, 0.87, 1.0);
 const OPERATOR_NAV_DIM: LinearRgba = LinearRgba::with_components(0.46, 0.46, 0.53, 1.0);
-const OPERATOR_NAV_ACTIVE_BG: LinearRgba = LinearRgba::with_components(0.19, 0.20, 0.25, 1.0);
+const OPERATOR_NAV_ACTIVE_BG: LinearRgba =
+    LinearRgba::with_components(0.16, 0.17, 0.21, 0.62);
 const OPERATOR_NAV_ACTIVE_TEXT: LinearRgba = LinearRgba::with_components(0.97, 0.97, 1.0, 1.0);
 const OPERATOR_NAV_ACCENT: LinearRgba = LinearRgba::with_components(0.67, 0.71, 0.92, 1.0);
 
@@ -148,14 +149,14 @@ impl crate::TermWindow {
         } else {
             0.0
         };
-        let top_inset = border.top.get() as f32 + tab_bar_height + 16.0;
+        let top_inset = border.top.get() as f32 + tab_bar_height + 10.0;
         let bottom_inset = border.bottom.get() as f32
             + if self.show_tab_bar && self.config.tab_bar_at_bottom {
                 self.tab_bar_pixel_height().unwrap_or(0.0)
             } else {
                 0.0
             }
-            + 18.0;
+            + 12.0;
 
         let counts = self.operator_nav_counts();
         let mut rows = Vec::with_capacity(counts.len());
@@ -219,49 +220,27 @@ impl crate::TermWindow {
                         text: OPERATOR_NAV_ACTIVE_TEXT.into(),
                     }))
                     .padding(BoxDimension {
-                        left: Dimension::Cells(0.25),
-                        right: Dimension::Cells(0.35),
-                        top: Dimension::Cells(0.18),
-                        bottom: Dimension::Cells(0.18),
+                        left: Dimension::Cells(0.16),
+                        right: Dimension::Cells(0.24),
+                        top: Dimension::Cells(0.12),
+                        bottom: Dimension::Cells(0.12),
                     })
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.0),
                         right: Dimension::Cells(0.0),
-                        top: Dimension::Cells(0.06),
-                        bottom: Dimension::Cells(0.06),
+                        top: Dimension::Cells(0.03),
+                        bottom: Dimension::Cells(0.03),
                     })
                     .border(BoxDimension {
                         left: if is_active {
-                            Dimension::Pixels(2.0)
+                            Dimension::Pixels(1.5)
                         } else {
                             Dimension::Pixels(0.0)
                         },
                         right: Dimension::Pixels(0.0),
                         top: Dimension::Pixels(0.0),
                         bottom: Dimension::Pixels(0.0),
-                    })
-                    .border_corners(Some(Corners {
-                        top_left: SizedPoly {
-                            width: Dimension::Pixels(4.0),
-                            height: Dimension::Pixels(4.0),
-                            poly: TOP_LEFT_ROUNDED_CORNER,
-                        },
-                        top_right: SizedPoly {
-                            width: Dimension::Pixels(4.0),
-                            height: Dimension::Pixels(4.0),
-                            poly: TOP_RIGHT_ROUNDED_CORNER,
-                        },
-                        bottom_left: SizedPoly {
-                            width: Dimension::Pixels(4.0),
-                            height: Dimension::Pixels(4.0),
-                            poly: BOTTOM_LEFT_ROUNDED_CORNER,
-                        },
-                        bottom_right: SizedPoly {
-                            width: Dimension::Pixels(4.0),
-                            height: Dimension::Pixels(4.0),
-                            poly: BOTTOM_RIGHT_ROUNDED_CORNER,
-                        },
-                    })),
+                    }),
             );
         }
 
@@ -274,8 +253,8 @@ impl crate::TermWindow {
                 text: OPERATOR_NAV_TEXT.into(),
             })
             .padding(BoxDimension {
-                left: Dimension::Pixels(8.0),
-                right: Dimension::Pixels(6.0),
+                left: Dimension::Pixels(6.0),
+                right: Dimension::Pixels(4.0),
                 top: Dimension::Pixels(top_inset),
                 bottom: Dimension::Pixels(bottom_inset),
             })
