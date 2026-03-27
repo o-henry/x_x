@@ -156,6 +156,32 @@ while preserving vanilla Kaku's feel.
   3. `07-03-PLAN.md` — rebalance the main work-surface hierarchy and stop for a structural screenshot gate before any overlay polish
   4. `07-04-PLAN.md` — refine Task Center only as a secondary surface after the persistent shell structure is approved
   5. `07-05-PLAN.md` — close Phase 07 with regression evidence, screenshot-based UAT, and honest docs on whether the current renderer was sufficient
+- [ ] Phase 8: native Rust shell replatform on top of the existing Kaku core
+  Intended outcome:
+  stop forcing the reference UI through the existing `kaku-gui` terminal renderer,
+  keep the current Kaku/mux/control-plane runtime as the backend source of truth,
+  and build a new Rust-native application shell that owns the persistent rail,
+  top chrome, main work surface, and context panes
+  Exact files for Phase 8 initial scaffold:
+  [Cargo.toml](/Users/henry/Documents/code/vibe/hybrid/x_x/Cargo.toml),
+  [PLANS.md](/Users/henry/Documents/code/vibe/hybrid/x_x/PLANS.md),
+  [kaku-native-shell/Cargo.toml](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-native-shell/Cargo.toml),
+  [kaku-native-shell/src/main.rs](/Users/henry/Documents/code/vibe/hybrid/x_x/kaku-native-shell/src/main.rs)
+  Runtime migration rule:
+  `kaku-gui` currently owns mux bootstrap plus `gui-sock-*` publication; Phase 8
+  must extract or replace that runtime responsibility before declaring the new
+  shell a full GUI replacement
+  Phase 8 implementation order:
+  1. add a compilable `GTK4 + libadwaita` native shell crate with a persistent
+     rail, top chrome, center work surface, and right/bottom context panes
+  2. bridge the new shell to Kaku control-plane snapshots using the existing
+     `codec`, `wezterm-client`, and `mux` state models
+  3. move mux bootstrap and socket publication into shared runtime code so the
+     new shell can boot Kaku without depending on `kaku-gui`
+  4. port operator actions and parity flows until the legacy GUI becomes optional
+  MVP exclusions:
+  no embedded browser, no new terminal renderer, and no attempt to embed
+  `kaku-gui` inside the new shell; initial work is `native shell + Kaku backend bridge`
 
 ## Non-Goals
 
