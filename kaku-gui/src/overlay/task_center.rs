@@ -1322,4 +1322,71 @@ mod tests {
         assert!(header[2].contains("status"));
         assert!(header[2].contains("progress"));
     }
+
+    #[test]
+    fn task_center_single_click_selects_and_double_click_requests_primary_action() {
+        let mut overlay = TaskCenterOverlay::new(vec![
+            entry(
+                "Planner",
+                "default",
+                TaskCenterSource::Pane,
+                TaskCenterKind::Pane,
+            ),
+            entry(
+                "Worker",
+                "unity-main",
+                TaskCenterSource::Pane,
+                TaskCenterKind::Pane,
+            ),
+        ]);
+        overlay.set_visible_rows_for_test(3);
+
+        let should_close = overlay.handle_mouse_for_test(0, ROW_START_Y + 1, MouseButtons::LEFT);
+        assert!(!should_close);
+        assert_eq!(overlay.selected_label_for_test(), Some("Worker"));
+
+        let should_close = overlay.handle_mouse_for_test(0, ROW_START_Y + 1, MouseButtons::LEFT);
+        assert!(should_close);
+    }
+
+    #[test]
+    fn task_center_wheel_scroll_keeps_selection_and_top_row_in_sync() {
+        let mut overlay = TaskCenterOverlay::new(
+            (0..6)
+                .map(|idx| {
+                    entry(
+                        &format!("Pane {idx}"),
+                        "unity-main",
+                        TaskCenterSource::Pane,
+                        TaskCenterKind::Pane,
+                    )
+                })
+                .collect(),
+        );
+        overlay.set_visible_rows_for_test(2);
+
+        overlay.handle_mouse_for_test(0, ROW_START_Y + 1, MouseButtons::VERT_WHEEL);
+        assert_eq!(overlay.top_row_for_test(), 1);
+        assert_eq!(overlay.selected_label_for_test(), Some("Pane 2"));
+    }
+
+    #[test]
+    fn task_center_inline_action_hit_testing_enters_metadata_prompt_mode() {
+        let mut entry = entry(
+            "Worker loop",
+            "unity-main",
+            TaskCenterSource::Pane,
+            TaskCenterKind::Pane,
+        );
+        entry.workspace_status = Some("blocked".to_string());
+        entry.workspace_progress = Some(42);
+
+        let mut overlay = TaskCenterOverlay::new(vec![entry]);
+        overlay.set_visible_rows_for_test(3);
+
+        let x = overlay.action_x_for_test(RowAction::EditStatus).unwrap();
+        let should_close = overlay.handle_mouse_for_test(x, ROW_START_Y, MouseButtons::LEFT);
+        assert!(!should_close);
+        assert_eq!(overlay.mode_name_for_test(), "prompt:status");
+    }
 }
