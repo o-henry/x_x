@@ -1082,4 +1082,14 @@ mod tests {
             "operator rail regressed into wide icon+label rows instead of compact one-line items"
         );
     }
+
+    #[test]
+    fn operator_nav_active_state_avoids_rounded_card_treatment() {
+        let source = operator_nav_source();
+
+        assert!(
+            !source.contains(".border_corners(Some(Corners"),
+            "operator rail regressed into rounded card rows instead of quiet edge chrome"
+        );
+    }
 }

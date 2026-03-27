@@ -6205,7 +6205,7 @@ impl Drop for TermWindow {
 mod tests {
     use super::{
         bell_notification_message, InputBroadcastMode, RenderableDimensions, TaskCenterScope,
-        TermWindow,
+        TermWindow, OPERATOR_NAV_MIN_WINDOW_WIDTH, OPERATOR_NAV_WIDTH_PX,
     };
     use codec::{WorkspaceProgressState, WorkspaceStatusState};
     use mlua::AnyUserDataExt;
@@ -6262,6 +6262,18 @@ mod tests {
         assert!(!InputBroadcastMode::CurrentTab.applies_to_active_tab(None, Some(tab_a)));
         assert!(InputBroadcastMode::AllTabs.applies_to_active_tab(Some(tab_a), Some(tab_b)));
         assert!(!InputBroadcastMode::Off.applies_to_active_tab(Some(tab_a), Some(tab_a)));
+    }
+
+    #[test]
+    fn operator_nav_width_matches_slim_rail_contract() {
+        assert!(
+            OPERATOR_NAV_WIDTH_PX <= 76,
+            "operator rail width should stay slim and edge-attached"
+        );
+        assert!(
+            OPERATOR_NAV_MIN_WINDOW_WIDTH > OPERATOR_NAV_WIDTH_PX,
+            "operator rail gating should only enable the rail in wide-enough windows"
+        );
     }
 
     fn dims(physical_top: StableRowIndex, scrollback_top: StableRowIndex) -> RenderableDimensions {
