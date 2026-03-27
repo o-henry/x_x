@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 05-hardening-and-compatibility-04-PLAN.md
-last_updated: "2026-03-27T11:24:24.364Z"
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-03-27T11:59:33.356Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 5
   completed_phases: 5
-  total_plans: 24
-  completed_plans: 24
+  total_plans: 25
+  completed_plans: 25
   percent: 100
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 05 (hardening-and-compatibility) — EXECUTING
-Plan: 4 of 4
+Plan: 1 of 1
 Status: Phase complete — ready for verification
 Last activity: 2026-03-27
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100%
 | Phase 05-hardening-and-compatibility P01 | 5min | 2 tasks | 2 files |
 | Phase 05-hardening-and-compatibility P02 | 15min | 2 tasks | 12 files |
 | Phase 05-hardening-and-compatibility P04 | 510 | 1 tasks | 6 files |
+| Phase 05-hardening-and-compatibility P05 | 18min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 05]: The stable respawn status string is respawn, and the CLI rejects unexpected rerun and respawn status values.
 - [Phase 05-hardening-and-compatibility]: Recorded Phase 5 as closed with a truthful limitation set instead of claiming full respawn compatibility after the live runtime mismatch.
 - [Phase 05-hardening-and-compatibility]: Used the real kaku-gui runtime and exact kaku cli commands as the source of truth for the Wave 4 UAT artifact.
+- [Phase 05-hardening-and-compatibility]: Treated the freshly rebuilt live gui socket as the source of truth for the respawn check instead of trusting the stale published socket path.
+- [Phase 05-hardening-and-compatibility]: Removed the respawn limitation from Phase 5 docs only after the rebuilt runtime returned status=respawn end-to-end.
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T11:24:24.359Z
-Stopped at: Completed 05-hardening-and-compatibility-04-PLAN.md
+Last session: 2026-03-27T11:59:33.349Z
+Stopped at: Completed 05-05-PLAN.md
 Resume file: None

@@ -97,4 +97,4 @@ Plans:
 | 2. Workspace Metadata Plane | 0/5 | Not started | - |
 | 3. Task Center Overlay | 0/TBD | Not started | - |
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
-| 5. Hardening and Compatibility | 4/4 | Complete | 2026-03-27 |
+| 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
