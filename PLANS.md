@@ -1,0 +1,252 @@
+# Kaku Agent Control Plane Plan
+
+## Big Picture
+
+Turn this local Kaku fork into a Rust-only multi-agent terminal by combining:
+
+- cmux-like notification and workspace metadata ergonomics
+- tmux-like task-pane lifecycle and control semantics
+
+while preserving vanilla Kaku's feel.
+
+## Progress
+
+- [ ] Phase 0: audit extension points and finalize file-level design
+- [x] Phase 1: notification store + unread semantics + CLI + visual markers
+  Phase 1 CLI contract:
+  `notify`, `list-notifications`, `clear-notifications`, `mark-read`, `mark-unread`,
+  `jump-next-unread`, `jump-prev-unread`, `identify`, `capabilities`
+  Notification JSON fields:
+  `notification_id`, `workspace`, `window_id`, `tab_id`, `pane_id`, `kind`, `title`,
+  `body`, `unread`, `unread_mode`, `created_at`, `updated_at`
+  Mutation JSON fields:
+  `cleared_count`, `updated_count`, `notification_ids`
+  Capabilities JSON fields:
+  `notification_commands`, `unread_modes`, `supports_tabbar_markers`
+- [x] Phase 2: workspace status/progress/log metadata
+  Phase 2 CLI contract:
+  `set-status`, `clear-status`, `list-status`, `set-progress`, `clear-progress`,
+  `log`, `clear-log`, `list-log`
+  Status JSON fields:
+  `workspace`, `status`, `updated_at`
+  Progress JSON fields:
+  `workspace`, `value`, `updated_at`
+  Log JSON fields:
+  `workspace`, `seq`, `message`, `created_at`
+  Clear summary JSON fields:
+  `cleared_count`, `workspaces`
+- [x] Phase 3: Task Center overlay
+  Shipped shape:
+  native `ShowTaskCenter` command, dedicated overlay, token filters, focus on `Enter`,
+  clear-unread on `c`, rerun when durable metadata exists
+- [x] Phase 4: task-pane lifecycle (remain-on-exit, rerun/respawn, silence watchdog, pipe-pane)
+  Phase 4 CLI contract:
+  `list-task-panes`, `set-remain-on-exit`, `rerun-pane`, `respawn-pane`,
+  `silence-watchdog`, `pipe-pane`
+  Task-pane list JSON fields:
+  `pane_id`, `workspace`, `window_id`, `tab_id`, `remain_on_exit`, `silenced`,
+  `is_dead`, `is_failed`, `rerun_available`, `tee_path`, `current_working_dir`, `updated_at`
+  Mutation JSON fields:
+  remain-on-exit -> `pane_id`, `remain_on_exit`, `is_dead`, `is_failed`, `updated_at`
+  rerun/respawn -> `pane_id`, `spawned_pane_id`, `status`
+  silence-watchdog -> `pane_id`, `silenced`
+  pipe-pane -> `pane_id`, `tee_path`
+- [x] Phase 5: hardening, tests, docs, regression pass
+  Shipped outcome:
+  green targeted hardening suite, explicit changed-files/limitations/UAT artifacts,
+  failing-pane survivability verified against a live GUI session, and baseline pane
+  management commands preserved
+  Residual limitation:
+  `respawn-pane` still returns a live runtime status mismatch (`respawned`) during
+  manual verification, so the documented `respawn` CLI contract is not yet fully
+  proven end-to-end
+
+## Non-Goals
+
+- embedded browser
+- PR/GitHub UI
+- full detached tmux server
+- port scanner
+- Swift/Xcode sidecar app
+
+## Acceptance
+
+Done means:
+- unread routing works
+- status/progress/log metadata works
+- failed panes persist
+- failed panes rerun
+- pipe-pane / tee works
+- remain-on-exit and task-pane lifecycle state survive pane exit long enough for CLI and Task Center consumers
+- old Kaku behavior still works
+- known verification gaps or runtime mismatches are documented immediately in the phase limitations/UAT artifacts instead of being hidden
+
+## Per-Phase Rule
+
+Before each phase:
+1. inspect existing Kaku extension points
+2. list exact files to change
+3. keep changes additive
+4. avoid broad refactors
+
+After each phase:
+1. compile / check
+2. run targeted verification
+3. document changed files and contracts
+4. update this plan
+
+## Phase 0 Audit
+
+### Exact Existing Extension Points
+
+- `mux/src/lib.rs`
+  Current ownership root for `Mux`, `MuxNotification`, subscriber fan-out, pane/window/tab resolution, workspace rename, and main-thread notification delivery. This is the best place for new control-plane stores and typed mux-level events.
+- `mux/src/localpane.rs`
+  Existing source of `Alert` emission, pane `user_vars`, `Progress`, and exit-behavior transitions. This is the current bridge between pane runtime state and mux notifications, and the likely hook for task-pane lifecycle signals.
+- `mux/src/pane.rs`
+  Shared pane trait already exposes `copy_user_vars`, `get_progress`, `get_current_working_dir`, and `exit_behavior`. This is the stable abstraction boundary for control-plane reads without teaching the GUI about concrete pane types.
+- `mux/src/tab.rs`
+  Owns tab focus, tab title updates, pane iteration, zoom-aware pane enumeration, and `PaneFocused` notifications. This is the right place to derive unread routing targets at tab granularity.
+- `mux/src/window.rs`
+  Owns workspace membership, active tab bookkeeping, and invalidation notifications. This is the right place to keep workspace-scoped aggregation separate from per-pane state.
+- `kaku/src/cli/mod.rs`
+  One-subcommand-per-file pattern, with clap wiring centralized here. New machine-readable control-plane commands should follow this layout rather than multiplexing into existing commands.
+- `kaku/src/cli/list.rs`
+  Existing example of a stable JSON contract with a table fallback. This is the contract style to mirror for notification and workspace metadata list commands.
+- `kaku/src/cli/proxy.rs`
+  Existing raw stream pipe for mux RPC. This is adjacent to, but not itself sufficient for, the planned JSONL event stream.
+- `crates/codec/src/lib.rs`
+  Canonical RPC PDU schema. Any new CLI capability that needs server cooperation or streaming must be declared here first.
+- `crates/wezterm-client/src/client.rs`
+  Client RPC shim and unilateral PDU handler. This is where new control-plane requests and streamed event PDUs will be exposed to the CLI and GUI.
+- `crates/wezterm-mux-server-impl/src/sessionhandler.rs`
+  Server dispatch for RPC and unilateral per-pane updates. This is the narrowest existing transport seam for control-plane queries and a JSONL-friendly event subscription path.
+- `kaku-gui/src/termwindow/mod.rs`
+  Current GUI state hub. Already owns per-pane unread bell state, overlay assignment/cancellation, tab and pane info snapshots, mux subscription filtering, and title/status update hooks. This is the main GUI integration point for unread routing, workspace metadata display, task-pane lifecycle surfacing, and Task Center activation.
+- `kaku-gui/src/tabbar.rs`
+  Existing synchronous tab title formatting and per-tab progress/title rendering. This is the right place for small additive unread/status markers without redesigning the shell.
+- `kaku-gui/src/commands.rs`
+  Existing GUI command registry. A Task Center entry should land here so it participates in the command palette and menu model like other native actions.
+- `kaku-gui/src/overlay/mod.rs`
+  Generic overlay bootstrap for tab- and pane-scoped overlays. This is the right creation/cancellation surface for a Task Center overlay.
+- `kaku-gui/src/overlay/launcher.rs`
+  Closest existing model for a searchable multi-source overlay with actions. Task Center should reuse this interaction shape rather than inventing a new shell.
+- `config/src/keyassignment.rs`
+  Home of `KeyAssignment`, launcher flags, and GUI action argument types. Any first-class Task Center action should be added here so config, commands, and UI stay aligned.
+- `kaku-gui/src/frontend.rs`
+  Already owns global unread bell badge accounting and workspace reconciliation. If unread routing expands beyond bells, this is the app-level place to keep badge/global notification behavior consistent.
+
+### Exact Files To Add Or Change
+
+#### Core mux data and events
+
+- Change `mux/src/lib.rs`
+  Add a mux-owned control-plane store entry point, new typed notifications for control-plane mutations, and read/query helpers used by CLI and GUI.
+- Change `mux/src/localpane.rs`
+  Emit lifecycle-relevant control-plane events on bell/progress/user-var/exit transitions without changing pane rendering behavior.
+- Change `mux/src/tab.rs`
+  Add helper methods for resolving next/previous unread pane targets within tab order and window order.
+- Change `mux/src/window.rs`
+  Add minimal helpers for workspace-scoped unread and metadata aggregation traversal.
+- Add `mux/src/control_plane.rs`
+  Shared in-memory control-plane state root that owns notification store, unread indexes, workspace metadata, and task-pane registry.
+- Add `mux/src/notification_store.rs`
+  Notification record model, unread indexing, and mutation APIs.
+- Add `mux/src/workspace_state.rs`
+  Workspace-scoped status/progress/log data model and query APIs.
+- Add `mux/src/task_panes.rs`
+  Task-pane lifecycle model: remain-on-exit intent, rerun metadata, failed/running state, silence flags, and output tee metadata.
+- Add `mux/src/event.rs`
+  Stable serializable event payload types for JSONL streaming and internal mux-to-CLI/gui fan-out.
+- Change `mux/src/lib.rs` module exports
+  Re-export the new control-plane modules without widening unrelated APIs.
+
+#### CLI and command contracts
+
+- Change `kaku/src/cli/mod.rs`
+  Register all new subcommands and keep Phase 1/2/3/4 command boundaries explicit.
+- Add `kaku/src/cli/notify.rs`
+- Add `kaku/src/cli/list_notifications.rs`
+- Add `kaku/src/cli/clear_notifications.rs`
+- Add `kaku/src/cli/mark_read.rs`
+- Add `kaku/src/cli/mark_unread.rs`
+- Add `kaku/src/cli/jump_next_unread.rs`
+- Add `kaku/src/cli/jump_prev_unread.rs`
+- Add `kaku/src/cli/identify.rs`
+- Add `kaku/src/cli/capabilities.rs`
+- Add `kaku/src/cli/set_status.rs`
+- Add `kaku/src/cli/clear_status.rs`
+- Add `kaku/src/cli/list_status.rs`
+- Add `kaku/src/cli/set_progress.rs`
+- Add `kaku/src/cli/clear_progress.rs`
+- Add `kaku/src/cli/log.rs`
+- Add `kaku/src/cli/clear_log.rs`
+- Add `kaku/src/cli/list_log.rs`
+- Add `kaku/src/cli/watch_events.rs`
+  Planned JSONL event stream CLI entry point. Keep this separate from `proxy` so the external contract is stable and control-plane-specific.
+
+#### RPC / transport
+
+- Change `crates/codec/src/lib.rs`
+  Add request/response PDUs for control-plane mutations and queries, plus a unilateral or subscribed event payload for JSONL-friendly streaming.
+- Change `crates/wezterm-client/src/client.rs`
+  Add typed RPC wrappers for the new commands and client-side handling for streamed control-plane events.
+- Change `crates/wezterm-mux-server-impl/src/sessionhandler.rs`
+  Dispatch the new PDUs into mux-owned control-plane state and bridge mux events into transport events.
+
+#### GUI unread routing and Task Center
+
+- Change `kaku-gui/src/termwindow/mod.rs`
+  Replace bell-only unread bookkeeping with mux-backed unread routing reads, expose workspace metadata snapshots to format/status hooks, and wire Task Center activation/actions.
+- Change `kaku-gui/src/tabbar.rs`
+  Add tab-level unread/status/progress marker composition using the new mux-backed snapshot data.
+- Change `kaku-gui/src/commands.rs`
+  Add a native Task Center command and palette/menubar metadata.
+- Change `config/src/keyassignment.rs`
+  Add a first-class `ShowTaskCenter` assignment or equivalent action args so the feature is configurable without overloading launcher flags.
+- Change `kaku-gui/src/overlay/mod.rs`
+  Export Task Center overlay bootstrap alongside existing overlay surfaces.
+- Add `kaku-gui/src/overlay/task_center.rs`
+  Searchable overlay for unread notifications, failed panes, running panes, and workspace metadata. Shipped Phase 3 behavior uses one normalized row list, query-token filters, focus on `Enter`, clear-unread on selected unread rows, and rerun only when runtime rerun metadata is still available.
+- Change `kaku-gui/src/overlay/launcher.rs`
+  Reuse filtering/rendering helpers where practical, but keep Task Center semantics in its own file.
+- Change `kaku-gui/src/frontend.rs`
+  Reconcile global unread badge behavior with mux-backed unread counts instead of the current bell-only counter.
+
+### Rough Event And Data Ownership
+
+- `mux`
+  Authoritative owner of notification records, unread indexes, workspace status/progress/log state, task-pane lifecycle state, and the canonical control-plane event log.
+- `mux` event model
+  Should emit typed control-plane events whenever store state changes. GUI and CLI stream consumers should subscribe to mux-owned events rather than recomputing from pane state.
+- `local pane` and other pane implementations
+  Producers of raw runtime signals only: bell, progress, user vars, cwd, exit status, and spawn metadata. They should not own notification history or unread indexes.
+- `window/tab` traversal
+  Ownership is derived, not stored: use existing window/tab/pane resolution for routing decisions, but keep unread truth in the mux store.
+- `CLI`
+  Stateless command surface. It should translate argv into codec requests, print stable JSON or JSONL, and avoid caching notification or metadata state locally.
+- `GUI termwindow`
+  Per-window presentation/controller only. It should cache the current snapshot needed for paint/overlay interactions, but not become the source of truth for unread or metadata state.
+- `Task Center overlay`
+  Pure view/controller over mux-owned snapshots. It should not own notifications or lifecycle state; it should request actions back through mux/commands.
+- `frontend`
+  App-level badge/OS-notification adapter only. Global unread counts should be derived from mux-backed unread totals, not from ad hoc pane flags.
+
+### Phase-Specific Risk Notes
+
+- Existing unread behavior is bell-only and partly GUI-owned.
+  `kaku-gui/src/termwindow/mod.rs` and `kaku-gui/src/frontend.rs` currently track unread bell state locally. Migrating to mux-backed unread routing must avoid double-counting or desynchronizing badge state.
+- `MuxNotification` fan-out is hot-path code.
+  Adding overly chatty control-plane events could create noisy per-window work. New event payloads should be typed and filterable so `subscribe_to_pane_updates()` can stay cheap.
+- Main-thread deadlock risk is real.
+  `TermWindow` already avoids certain `resolve_pane_id` calls on the main thread. Any new unread-routing or Task Center actions must preserve that discipline.
+- Overlay lifecycle already has leak-sensitive edges.
+  `assign_overlay`, `cancel_overlay_for_tab`, and `cancel_overlay_for_pane` currently clean up overlay panes carefully. Task Center should reuse this pattern instead of inventing a detached overlay manager.
+- Task-pane lifecycle overlaps existing `ExitBehavior`.
+  `mux/src/localpane.rs` already has `Hold`, `Close`, and `CloseOnCleanExit` semantics. Remain-on-exit and rerun metadata should extend that behavior, not fork a second lifecycle model.
+- JSONL stream contract needs version discipline.
+  A `watch-events` stream is tempting to expose raw internal notifications, but Phase 0 should assume a separate stable event schema so future mux refactors do not break local tooling.
+- Workspace metadata can sprawl quickly.
+  Keep status/progress/log as workspace-scoped structured stores with explicit limits and clear mutation semantics; do not let ad hoc user vars become the persistence format.
+- Task Center scope creep is a risk.
+  Reuse launcher-style filtering and existing overlay surfaces. Do not turn Phase 3 planning into a sidebar, browser, or daemon design.
