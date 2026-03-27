@@ -2,16 +2,16 @@ use crate::termwindow::{PaneInformation, TabInformation, UIItem, UIItemType};
 use config::{ConfigHandle, TabBarColors};
 use finl_unicode::grapheme_clusters::Graphemes;
 use mlua::FromLua;
-use mux::pane::CachePolicy;
 use mux::Mux;
+use mux::pane::CachePolicy;
 use std::path::Path;
-use termwiz::cell::{unicode_column_width, Cell, CellAttributes};
+use termwiz::cell::{Cell, CellAttributes, unicode_column_width};
 use termwiz::color::{AnsiColor, ColorSpec};
 use termwiz::escape::csi::Sgr;
 use termwiz::escape::parser::Parser;
-use termwiz::escape::{Action, ControlCode, CSI};
+use termwiz::escape::{Action, CSI, ControlCode};
 use termwiz::surface::SEQ_ZERO;
-use termwiz_funcs::{format_as_escapes, FormatColor, FormatItem};
+use termwiz_funcs::{FormatColor, FormatItem, format_as_escapes};
 use wezterm_term::{Line, Progress};
 use window::{IntegratedTitleButton, IntegratedTitleButtonAlignment, IntegratedTitleButtonStyle};
 
@@ -47,7 +47,10 @@ struct TitleText {
     len: usize,
 }
 
-const OPERATOR_MARKER_LABEL: &str = " · ops";
+const UNREAD_MARKER_LABEL: &str = "●";
+const STATUS_MARKER_LABEL: &str = "◇";
+const PROGRESS_MARKER_LABEL: &str = "◔";
+const OPERATOR_MARKER_PREFIX: &str = "  ";
 
 fn call_format_tab_title(
     tab: &TabInformation,
@@ -228,12 +231,24 @@ fn tab_has_actionable_operator_state(tab: &TabInformation) -> bool {
 }
 
 fn operator_marker_suffix(tab: &TabInformation) -> Option<String> {
-    tab_has_actionable_operator_state(tab).then(|| OPERATOR_MARKER_LABEL.to_string())
+    let mut marker = String::new();
+
+    if tab.unread_notification_count > 0 {
+        marker.push_str(UNREAD_MARKER_LABEL);
+    }
+    if tab.workspace_status.is_some() {
+        marker.push_str(STATUS_MARKER_LABEL);
+    }
+    if tab.workspace_progress.is_some() {
+        marker.push_str(PROGRESS_MARKER_LABEL);
+    }
+
+    (!marker.is_empty()).then(|| format!("{OPERATOR_MARKER_PREFIX}{marker}"))
 }
 
 fn prefix_unread_marker(tab: &TabInformation, title: String) -> String {
     if tab.unread_notification_count > 0 {
-        format!("! {title}")
+        format!("{UNREAD_MARKER_LABEL} {title}")
     } else {
         title
     }
@@ -1103,7 +1118,7 @@ mod test {
     #[test]
     fn compute_tab_plain_title_prefixes_unread_marker_when_notifications_exist() {
         let tab = sample_tab(2);
-        assert_eq!(compute_tab_plain_title(&tab), "! no pane");
+        assert_eq!(compute_tab_plain_title(&tab), "● no pane");
     }
 
     #[test]
@@ -1127,7 +1142,7 @@ mod test {
     #[test]
     fn compute_tab_plain_title_combines_unread_prefix_and_workspace_metadata() {
         let tab = sample_tab_with_metadata(2, Some("blocked"), Some(37));
-        assert_eq!(compute_tab_plain_title(&tab), "! no pane · [blocked] 37%");
+        assert_eq!(compute_tab_plain_title(&tab), "● no pane · [blocked] 37%");
     }
 
     #[test]
@@ -1144,7 +1159,7 @@ mod test {
             })
             .collect::<String>();
 
-        assert!(rendered.contains("! shell"));
+        assert!(rendered.contains("● shell"));
     }
 
     #[test]
@@ -1155,12 +1170,64 @@ mod test {
         let actionable = sample_tab_with_metadata(1, Some("blocked"), Some(37));
         assert_eq!(
             operator_marker_suffix(&actionable).as_deref(),
-            Some(" · ops")
+            Some("  ●◇◔")
+        );
+    }
+
+    #[test]
+    fn tabbar_runtime_title_keeps_plain_label_without_text_heavy_metadata_suffix() {
+        let tab = sample_tab_with_metadata(1, Some("blocked"), Some(37));
+        let config = config::ConfigHandle::default_config();
+        let title = build_default_title(&tab, &config, "shell", true, false);
+        let rendered = title
+            .items
+            .into_iter()
+            .filter_map(|item| match item {
+                FormatItem::Text(text) => Some(text),
+                _ => None,
+            })
+            .collect::<String>();
+
+        assert!(rendered.contains("shell"));
+        assert!(!rendered.contains("blocked"));
+        assert!(!rendered.contains("37%"));
+    }
+
+    #[test]
+    fn tabbar_state_renders_compact_operator_marker_cluster_separately_from_title() {
+        config::designate_this_as_the_main_thread();
+        config::use_test_configuration();
+        let tab = sample_tab_with_metadata(1, Some("blocked"), Some(37));
+        let config = config::ConfigHandle::default_config();
+        let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
+
+        let tab_entry = state
+            .items()
+            .iter()
+            .find(|entry| matches!(entry.item, TabBarItem::Tab { .. }))
+            .expect("tab entry");
+        let marker_entry = state
+            .items()
+            .iter()
+            .find(|entry| matches!(entry.item, TabBarItem::OperatorMarker { .. }))
+            .expect("operator marker");
+
+        assert_eq!(
+            tab_entry.title.columns_as_str(0..tab_entry.title.len()),
+            " no pane "
+        );
+        assert_eq!(
+            marker_entry
+                .title
+                .columns_as_str(0..marker_entry.title.len()),
+            "  ●◇◔"
         );
     }
 
     #[test]
     fn tabbar_state_exposes_operator_marker_hit_region_for_actionable_tabs() {
+        config::designate_this_as_the_main_thread();
+        config::use_test_configuration();
         let tab = sample_tab_with_metadata(1, Some("blocked"), Some(37));
         let config = config::ConfigHandle::default_config();
         let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
@@ -1176,13 +1243,17 @@ mod test {
 
     #[test]
     fn tabbar_state_keeps_passive_tabs_without_operator_marker_hit_region() {
+        config::designate_this_as_the_main_thread();
+        config::use_test_configuration();
         let tab = sample_tab_with_metadata(0, None, None);
         let config = config::ConfigHandle::default_config();
         let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
 
-        assert!(!state
-            .items()
-            .iter()
-            .any(|entry| matches!(entry.item, TabBarItem::OperatorMarker { .. })));
+        assert!(
+            !state
+                .items()
+                .iter()
+                .any(|entry| matches!(entry.item, TabBarItem::OperatorMarker { .. }))
+        );
     }
 }
