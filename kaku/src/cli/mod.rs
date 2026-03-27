@@ -7,15 +7,29 @@ mod activate_pane;
 mod activate_pane_direction;
 mod activate_tab;
 mod adjust_pane_size;
+mod capabilities;
+mod clear_progress;
+mod clear_status;
+mod clear_notifications;
 mod get_pane_direction;
 mod get_text;
+mod identify;
+mod jump_next_unread;
+mod jump_prev_unread;
 mod kill_pane;
 mod list;
 mod list_clients;
+mod list_notifications;
+mod list_status;
+mod mark_read;
+mod mark_unread;
 mod move_pane_to_new_tab;
+mod notify;
 mod proxy;
 mod rename_workspace;
 mod send_text;
+mod set_progress;
+mod set_status;
 mod set_tab_title;
 mod set_window_title;
 mod spawn_command;
@@ -80,6 +94,96 @@ enum CliSubCommand {
 
     #[command(name = "list-clients", about = "list clients")]
     ListClients(list_clients::ListClientsCommand),
+
+    #[command(name = "capabilities", about = "show notification capabilities")]
+    Capabilities(capabilities::CapabilitiesCommand),
+
+    #[command(
+        name = "identify",
+        rename_all = "kebab",
+        about = "identify notification target"
+    )]
+    Identify(identify::IdentifyCommand),
+
+    #[command(
+        name = "jump-next-unread",
+        rename_all = "kebab",
+        about = "jump to the next unread notification target"
+    )]
+    JumpNextUnread(jump_next_unread::JumpNextUnreadCommand),
+
+    #[command(
+        name = "jump-prev-unread",
+        rename_all = "kebab",
+        about = "jump to the previous unread notification target"
+    )]
+    JumpPrevUnread(jump_prev_unread::JumpPrevUnreadCommand),
+
+    #[command(name = "notify", rename_all = "kebab", about = "create a notification")]
+    Notify(notify::NotifyCommand),
+
+    #[command(
+        name = "list-notifications",
+        rename_all = "kebab",
+        about = "list notifications"
+    )]
+    ListNotifications(list_notifications::ListNotificationsCommand),
+
+    #[command(
+        name = "clear-notifications",
+        rename_all = "kebab",
+        about = "clear notifications"
+    )]
+    ClearNotifications(clear_notifications::ClearNotificationsCommand),
+
+    #[command(
+        name = "set-status",
+        rename_all = "kebab",
+        about = "set workspace status"
+    )]
+    SetStatus(set_status::SetWorkspaceStatusCommand),
+
+    #[command(
+        name = "clear-status",
+        rename_all = "kebab",
+        about = "clear workspace status"
+    )]
+    ClearStatus(clear_status::ClearWorkspaceStatusCommand),
+
+    #[command(
+        name = "list-status",
+        rename_all = "kebab",
+        about = "list workspace statuses"
+    )]
+    ListStatus(list_status::ListWorkspaceStatusCommand),
+
+    #[command(
+        name = "set-progress",
+        rename_all = "kebab",
+        about = "set workspace progress"
+    )]
+    SetProgress(set_progress::SetWorkspaceProgressCommand),
+
+    #[command(
+        name = "clear-progress",
+        rename_all = "kebab",
+        about = "clear workspace progress"
+    )]
+    ClearProgress(clear_progress::ClearWorkspaceProgressCommand),
+
+    #[command(
+        name = "mark-read",
+        rename_all = "kebab",
+        about = "mark notifications as read"
+    )]
+    MarkRead(mark_read::MarkReadCommand),
+
+    #[command(
+        name = "mark-unread",
+        rename_all = "kebab",
+        about = "mark notifications as unread"
+    )]
+    MarkUnread(mark_unread::MarkUnreadCommand),
 
     #[command(name = "proxy", about = "start rpc proxy pipe")]
     Proxy(proxy::ProxyCommand),
@@ -180,8 +284,22 @@ async fn run_cli_async(opts: &crate::Opt, cli: CliCommand) -> anyhow::Result<()>
     )?;
 
     match cli.sub {
+        CliSubCommand::Capabilities(cmd) => cmd.run(client).await,
+        CliSubCommand::Identify(cmd) => cmd.run(client).await,
+        CliSubCommand::JumpNextUnread(cmd) => cmd.run(client).await,
+        CliSubCommand::JumpPrevUnread(cmd) => cmd.run(client).await,
         CliSubCommand::ListClients(cmd) => cmd.run(client).await,
         CliSubCommand::List(cmd) => cmd.run(client).await,
+        CliSubCommand::Notify(cmd) => cmd.run(client).await,
+        CliSubCommand::ListNotifications(cmd) => cmd.run(client).await,
+        CliSubCommand::ClearNotifications(cmd) => cmd.run(client).await,
+        CliSubCommand::SetStatus(cmd) => cmd.run(client).await,
+        CliSubCommand::ClearStatus(cmd) => cmd.run(client).await,
+        CliSubCommand::ListStatus(cmd) => cmd.run(client).await,
+        CliSubCommand::SetProgress(cmd) => cmd.run(client).await,
+        CliSubCommand::ClearProgress(cmd) => cmd.run(client).await,
+        CliSubCommand::MarkRead(cmd) => cmd.run(client).await,
+        CliSubCommand::MarkUnread(cmd) => cmd.run(client).await,
         CliSubCommand::MovePaneToNewTab(cmd) => cmd.run(client).await,
         CliSubCommand::SplitPane(cmd) => cmd.run(client).await,
         CliSubCommand::SendText(cmd) => cmd.run(client).await,
