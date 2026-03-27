@@ -2672,4 +2672,43 @@ mod tests {
         }
         assert!(mux.task_pane_record(pane_id).is_none());
     }
+
+    #[test]
+    fn task_panes_record_task_pane_exit_preserves_prior_cwd_for_immediate_failures() {
+        let mux = Mux::new(None);
+        let pane_id = PaneId::new(77);
+
+        {
+            let mut task_panes = mux.task_panes.write();
+            task_panes.upsert_live(
+                pane_id,
+                Some("unity-main".to_string()),
+                Some(5),
+                Some(TabId::new(6)),
+                false,
+                false,
+            );
+            let _ = task_panes.refresh_live_metadata(
+                pane_id,
+                Some("file:///tmp/immediate-failure".to_string()),
+                HashMap::new(),
+            );
+        }
+
+        let record = mux
+            .record_task_pane_exit(
+                pane_id,
+                ExitBehavior::CloseOnCleanExit,
+                false,
+                false,
+                None,
+                &HashMap::new(),
+            )
+            .expect("failed pane should still be recorded");
+
+        assert_eq!(
+            record.current_working_dir.as_deref(),
+            Some("file:///tmp/immediate-failure")
+        );
+    }
 }
