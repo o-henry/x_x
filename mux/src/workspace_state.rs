@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 pub const WORKSPACE_LOG_CAP: usize = 200;
 
@@ -44,53 +45,157 @@ impl WorkspaceStateStore {
         Self::default()
     }
 
-    pub fn set_status(&mut self, _workspace: &str, _status: &str) -> bool {
-        false
+    pub fn set_status(&mut self, workspace: &str, status: &str) -> bool {
+        let now = utc_now();
+        match self.status_by_workspace.get_mut(workspace) {
+            Some(record) if record.status == status => false,
+            Some(record) => {
+                record.status = status.to_string();
+                record.updated_at = now;
+                true
+            }
+            None => {
+                self.status_by_workspace.insert(
+                    workspace.to_string(),
+                    WorkspaceStatusRecord {
+                        workspace: workspace.to_string(),
+                        status: status.to_string(),
+                        updated_at: now,
+                    },
+                );
+                true
+            }
+        }
     }
 
-    pub fn clear_status(&mut self, _workspace: &str) -> bool {
-        false
+    pub fn clear_status(&mut self, workspace: &str) -> bool {
+        self.status_by_workspace.remove(workspace).is_some()
     }
 
     pub fn list_status(&self) -> Vec<WorkspaceStatusRecord> {
-        vec![]
+        let mut records = self
+            .status_by_workspace
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.workspace.cmp(&right.workspace));
+        records
     }
 
-    pub fn status_for_workspace(&self, _workspace: &str) -> Option<WorkspaceStatusRecord> {
-        None
+    pub fn status_for_workspace(&self, workspace: &str) -> Option<WorkspaceStatusRecord> {
+        self.status_by_workspace.get(workspace).cloned()
     }
 
     pub fn set_progress(
         &mut self,
-        _workspace: &str,
-        _value: u8,
+        workspace: &str,
+        value: u8,
     ) -> Result<bool, WorkspaceProgressError> {
-        Ok(false)
+        if value > 100 {
+            return Err(WorkspaceProgressError::OutOfRange(value));
+        }
+
+        let now = utc_now();
+        let changed = match self.progress_by_workspace.get_mut(workspace) {
+            Some(record) if record.value == value => false,
+            Some(record) => {
+                record.value = value;
+                record.updated_at = now;
+                true
+            }
+            None => {
+                self.progress_by_workspace.insert(
+                    workspace.to_string(),
+                    WorkspaceProgressRecord {
+                        workspace: workspace.to_string(),
+                        value,
+                        updated_at: now,
+                    },
+                );
+                true
+            }
+        };
+        Ok(changed)
     }
 
-    pub fn clear_progress(&mut self, _workspace: &str) -> bool {
-        false
+    pub fn clear_progress(&mut self, workspace: &str) -> bool {
+        self.progress_by_workspace.remove(workspace).is_some()
     }
 
-    pub fn progress_for_workspace(&self, _workspace: &str) -> Option<WorkspaceProgressRecord> {
-        None
+    pub fn progress_for_workspace(&self, workspace: &str) -> Option<WorkspaceProgressRecord> {
+        self.progress_by_workspace.get(workspace).cloned()
     }
 
-    pub fn append_log(&mut self, _workspace: &str, _message: &str) -> WorkspaceLogRecord {
-        unimplemented!()
+    pub fn append_log(&mut self, workspace: &str, message: &str) -> WorkspaceLogRecord {
+        self.next_log_seq += 1;
+        let record = WorkspaceLogRecord {
+            workspace: workspace.to_string(),
+            seq: self.next_log_seq,
+            message: message.to_string(),
+            created_at: utc_now(),
+        };
+
+        let logs = self.logs_by_workspace.entry(workspace.to_string()).or_default();
+        logs.push(record.clone());
+        if logs.len() > WORKSPACE_LOG_CAP {
+            let overflow = logs.len() - WORKSPACE_LOG_CAP;
+            logs.drain(0..overflow);
+        }
+
+        record
     }
 
-    pub fn clear_log(&mut self, _workspace: &str) -> bool {
-        false
+    pub fn clear_log(&mut self, workspace: &str) -> bool {
+        self.logs_by_workspace.remove(workspace).is_some()
     }
 
-    pub fn list_log(&self, _workspace: &str) -> Vec<WorkspaceLogRecord> {
-        vec![]
+    pub fn list_log(&self, workspace: &str) -> Vec<WorkspaceLogRecord> {
+        self.logs_by_workspace
+            .get(workspace)
+            .cloned()
+            .unwrap_or_default()
     }
 
-    pub fn rename_workspace(&mut self, _old_workspace: &str, _new_workspace: &str) -> bool {
-        false
+    pub fn rename_workspace(&mut self, old_workspace: &str, new_workspace: &str) -> bool {
+        if old_workspace == new_workspace {
+            return false;
+        }
+
+        let mut changed = false;
+        if let Some(mut status) = self.status_by_workspace.remove(old_workspace) {
+            status.workspace = new_workspace.to_string();
+            status.updated_at = utc_now();
+            self.status_by_workspace
+                .insert(new_workspace.to_string(), status);
+            changed = true;
+        }
+
+        if let Some(mut progress) = self.progress_by_workspace.remove(old_workspace) {
+            progress.workspace = new_workspace.to_string();
+            progress.updated_at = utc_now();
+            self.progress_by_workspace
+                .insert(new_workspace.to_string(), progress);
+            changed = true;
+        }
+
+        if let Some(mut logs) = self.logs_by_workspace.remove(old_workspace) {
+            for record in &mut logs {
+                record.workspace = new_workspace.to_string();
+            }
+            self.logs_by_workspace.insert(new_workspace.to_string(), logs);
+            changed = true;
+        }
+
+        changed
     }
+}
+
+fn utc_now() -> DateTime<Utc> {
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default();
+    DateTime::from_timestamp(now.as_secs() as i64, now.subsec_nanos())
+        .expect("system time out of range")
 }
 
 #[cfg(test)]
