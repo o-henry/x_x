@@ -252,7 +252,8 @@ fn build_default_title(
 ) -> TitleText {
     let mut items = vec![];
     let mut len = 0;
-    let mut title = prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, title.to_string()));
+    let mut title =
+        prefix_unread_marker(tab, apply_workspace_metadata_suffix(tab, title.to_string()));
 
     let classic_spacing = if config.use_fancy_tab_bar { "" } else { " " };
     if with_tab_index && config.show_tab_index_in_tab_bar {
@@ -1084,5 +1085,41 @@ mod test {
             .collect::<String>();
 
         assert!(rendered.contains("! shell"));
+    }
+
+    #[test]
+    fn operator_marker_suffix_only_appears_for_actionable_operator_state() {
+        let passive = sample_tab_with_metadata(0, None, None);
+        assert_eq!(operator_marker_suffix(&passive), None);
+
+        let actionable = sample_tab_with_metadata(1, Some("blocked"), Some(37));
+        assert_eq!(operator_marker_suffix(&actionable).as_deref(), Some(" · ops"));
+    }
+
+    #[test]
+    fn tabbar_state_exposes_operator_marker_hit_region_for_actionable_tabs() {
+        let tab = sample_tab_with_metadata(1, Some("blocked"), Some(37));
+        let config = config::ConfigHandle::default_config();
+        let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
+
+        assert!(state.items().iter().any(|entry| matches!(
+            entry.item,
+            TabBarItem::OperatorMarker {
+                tab_idx: 0,
+                active: true,
+            }
+        )));
+    }
+
+    #[test]
+    fn tabbar_state_keeps_passive_tabs_without_operator_marker_hit_region() {
+        let tab = sample_tab_with_metadata(0, None, None);
+        let config = config::ConfigHandle::default_config();
+        let state = TabBarState::new(80, None, &[tab], &[], false, None, &config, "", "");
+
+        assert!(!state.items().iter().any(|entry| matches!(
+            entry.item,
+            TabBarItem::OperatorMarker { .. }
+        )));
     }
 }
