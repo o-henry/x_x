@@ -101,9 +101,9 @@ Plans:
   4. The new surfaces still feel like Kaku overlays, inspectors, menus, or tabbar affordances rather than a separate dashboard shell.
 **Plans**: 4 plans
 Plans:
-- [ ] 06-01-PLAN.md — Add the Phase 06 controller seam: scoped Task Center bootstrap plus typed workspace metadata read/write helpers in TermWindow and the client-domain transport.
+- [x] 06-01-PLAN.md — Add the Phase 06 controller seam: scoped Task Center bootstrap plus typed workspace metadata read/write helpers in TermWindow and the client-domain transport.
 - [ ] 06-02-PLAN.md — Upgrade Task Center into the primary operator surface with visible inline actions and keyboard+mouse parity.
-- [ ] 06-03-PLAN.md — Add compact tabbar operator affordances and click-through discovery into scoped Task Center views.
+- [x] 06-03-PLAN.md — Add compact tabbar operator affordances and click-through discovery into scoped Task Center views.
 - [ ] 06-04-PLAN.md — Close Phase 06 with targeted verification, changed-files/limitations/UAT artifacts, and shipped-shape spec updates.
 **UI hint**: yes
 
@@ -116,4 +116,4 @@ Plans:
 | 3. Task Center Overlay | 0/TBD | Not started | - |
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
 | 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
-| 6. Operator UI Surfaces | 0/TBD | Not started | - |
+| 6. Operator UI Surfaces | 2/4 | In Progress | - |

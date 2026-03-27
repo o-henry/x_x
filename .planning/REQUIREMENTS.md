@@ -50,8 +50,8 @@
 
 ### Operator UI
 
-- [ ] **UI-01**: Developer can discover core control-plane actions from native Kaku UI without remembering CLI subcommands.
-- [ ] **UI-02**: Developer can inspect notification, unread, failed-task, and workspace status context through mouse-friendly and keyboard-friendly UI surfaces.
+- [x] **UI-01**: Developer can discover core control-plane actions from native Kaku UI without remembering CLI subcommands.
+- [x] **UI-02**: Developer can inspect notification, unread, failed-task, and workspace status context through mouse-friendly and keyboard-friendly UI surfaces.
 - [x] **UI-03**: Developer can trigger common lifecycle and attention actions from the UI, including focus, clear unread, rerun/respawn, and remain-on-exit style toggles where applicable.
 - [x] **UI-04**: Developer can update workspace-facing metadata through UI affordances for the common path, with CLI preserved as an advanced fallback rather than the primary path.
 - [x] **UI-05**: New control-plane UI remains additive and Kaku-native, avoiding a dashboard-shell rewrite while still feeling more operable than a CLI-only workflow.
@@ -104,8 +104,8 @@
 | COMP-03 | Phase 5 | Complete |
 | COMP-04 | Phase 5 | Complete |
 | COMP-05 | Phase 5 | Complete |
-| UI-01 | Phase 6 | Pending |
-| UI-02 | Phase 6 | Pending |
+| UI-01 | Phase 6 | Complete |
+| UI-02 | Phase 6 | Complete |
 | UI-03 | Phase 6 | Complete |
 | UI-04 | Phase 6 | Complete |
 | UI-05 | Phase 6 | Complete |
