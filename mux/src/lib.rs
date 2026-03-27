@@ -53,7 +53,19 @@ use crate::pane::{CachePolicy, Pane, PaneId, PaneReader};
 use crate::pane_encoding::{decode_bytes_to_string, PaneOutputDecoder};
 use crate::ssh_agent::AgentProxy;
 use crate::tab::{SplitRequest, Tab, TabId};
+use crate::task_center::{
+    build_task_center_entries, TaskCenterEntry, TaskCenterPaneSnapshot, TaskCenterTabSnapshot,
+    TaskCenterWindowSnapshot,
+};
+use crate::task_panes::{
+    rerun_metadata_from_command_builder, rerun_metadata_from_user_vars, TaskPaneExitRecord,
+    TaskPaneRecord, TaskPaneStore,
+};
 use crate::window::{Window, WindowId};
+use crate::workspace_state::{
+    WorkspaceLogRecord, WorkspaceProgressError, WorkspaceProgressRecord, WorkspaceStateStore,
+    WorkspaceStatusRecord,
+};
 use anyhow::{anyhow, Context, Error};
 use config::keyassignment::{PaneEncoding, SpawnTabDomain};
 use config::{configuration, ExitBehavior, GuiPosition};
@@ -72,7 +84,9 @@ use percent_encoding::percent_decode_str;
 use portable_pty::{CommandBuilder, ExitStatus, PtySize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
+use std::ffi::OsString;
 #[cfg(windows)]
 use std::os::raw::c_int;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -99,12 +113,14 @@ pub mod renderable;
 pub mod ssh;
 pub mod ssh_agent;
 pub mod tab;
+pub mod task_center;
+pub mod task_panes;
 pub mod termwiztermtab;
 pub mod tmux;
 pub mod tmux_commands;
-pub mod workspace_state;
 mod tmux_pty;
 pub mod window;
+pub mod workspace_state;
 
 use crate::activity::Activity;
 
@@ -139,6 +155,7 @@ pub enum MuxNotification {
         window_id: WindowId,
     },
     NotificationsChanged,
+    WorkspaceMetadataChanged,
     PaneFocused(PaneId),
     TabResized(TabId),
     TabTitleChanged {
@@ -153,6 +170,7 @@ pub enum MuxNotification {
         old_workspace: String,
         new_workspace: String,
     },
+    TaskPaneLifecycleChanged(PaneId),
 }
 
 static SUB_ID: AtomicUsize = AtomicUsize::new(0);
@@ -170,6 +188,8 @@ pub struct Mux {
     identity: RwLock<Option<Arc<ClientId>>>,
     num_panes_by_workspace: RwLock<HashMap<String, usize>>,
     notification_store: RwLock<NotificationStore>,
+    workspace_state: RwLock<WorkspaceStateStore>,
+    task_panes: RwLock<TaskPaneStore>,
     main_thread_id: std::thread::ThreadId,
     agent: Option<AgentProxy>,
     /// Dead flags for pane reader threads, used to signal thread termination
@@ -206,6 +226,32 @@ fn send_actions_to_mux(
         }
     }
     histogram!("send_actions_to_mux.rate").record(1.);
+}
+
+fn duplicate_pane_output_to_tee(pane_id: PaneId, decoded: &[u8]) {
+    let Some(mux) = Mux::try_get() else {
+        return;
+    };
+    let Some(record) = mux.task_pane_record(pane_id) else {
+        return;
+    };
+    let Some(path) = record.tee_path else {
+        return;
+    };
+    if decoded.is_empty() {
+        return;
+    }
+
+    match OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(mut file) => {
+            if let Err(err) = file.write_all(decoded) {
+                log::error!("failed to tee pane {} output to {}: {err:#}", pane_id, path);
+            }
+        }
+        Err(err) => {
+            log::error!("failed to open tee file for pane {} at {}: {err:#}", pane_id, path);
+        }
+    }
 }
 
 /// Extract SetUserVar actions from a batch of terminal actions and post them
@@ -583,6 +629,7 @@ fn read_from_pane_pty(
                 } else {
                     buf[..size].to_vec()
                 };
+                duplicate_pane_output_to_tee(pane_id, &decoded);
                 if let Err(err) = tx.write_all(&decoded) {
                     error!(
                         "read_pty failed to write to parser: pane {} {:?}",
@@ -722,6 +769,8 @@ impl Mux {
             identity: RwLock::new(None),
             num_panes_by_workspace: RwLock::new(HashMap::new()),
             notification_store: RwLock::new(NotificationStore::new()),
+            workspace_state: RwLock::new(WorkspaceStateStore::new()),
+            task_panes: RwLock::new(TaskPaneStore::new()),
             main_thread_id: std::thread::current().id(),
             agent,
             pane_dead_flags: RwLock::new(HashMap::new()),
@@ -945,6 +994,30 @@ impl Mux {
         if updated > 0 {
             self.notify(MuxNotification::NotificationsChanged);
         }
+
+        if self
+            .workspace_state
+            .write()
+            .rename_workspace(old_workspace, new_workspace)
+        {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+    }
+
+    fn task_pane_context(&self, pane_id: PaneId) -> (Option<String>, Option<WindowId>, Option<TabId>) {
+        for window_id in self.iter_windows() {
+            if let Some(window) = self.get_window(window_id) {
+                let workspace = window.get_workspace().to_string();
+                for tab in window.iter() {
+                    for pos in tab.iter_panes_ignoring_zoom() {
+                        if pos.pane.pane_id() == pane_id {
+                            return (Some(workspace), Some(window_id), Some(tab.tab_id()));
+                        }
+                    }
+                }
+            }
+        }
+        (None, None, None)
     }
 
     /// Overrides the current client identity.
@@ -1147,6 +1220,13 @@ impl Mux {
             pane.kill();
             self.notify(MuxNotification::PaneRemoved(pane_id));
             changed = true;
+        }
+        // Preserve any tracked task-pane record until the exit path has a
+        // chance to reconcile it. record_task_pane_exit() later removes
+        // clean exits that don't need to persist.
+        let should_preserve_task_pane = self.task_panes.read().task_pane(pane_id).is_some();
+        if !should_preserve_task_pane {
+            self.task_panes.write().remove_task_pane(pane_id);
         }
 
         if changed {
@@ -1445,6 +1525,376 @@ impl Mux {
         self.notification_store.read().list_notifications()
     }
 
+    pub fn notification_anchor_pane_id(&self, notification_id: &str) -> Option<PaneId> {
+        self.notification_store
+            .read()
+            .anchor_pane_id_for_notification(notification_id)
+    }
+
+    pub fn set_workspace_status(&self, workspace: &str, status: &str) -> bool {
+        let changed = self.workspace_state.write().set_status(workspace, status);
+        if changed {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+        changed
+    }
+
+    pub fn clear_workspace_status(&self, workspace: &str) -> bool {
+        let changed = self.workspace_state.write().clear_status(workspace);
+        if changed {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+        changed
+    }
+
+    pub fn list_workspace_status(&self) -> Vec<WorkspaceStatusRecord> {
+        self.workspace_state.read().list_status()
+    }
+
+    pub fn workspace_status_for_workspace(&self, workspace: &str) -> Option<WorkspaceStatusRecord> {
+        self.workspace_state.read().status_for_workspace(workspace)
+    }
+
+    pub fn set_workspace_progress(
+        &self,
+        workspace: &str,
+        value: u8,
+    ) -> Result<bool, WorkspaceProgressError> {
+        let changed = self
+            .workspace_state
+            .write()
+            .set_progress(workspace, value)?;
+        if changed {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+        Ok(changed)
+    }
+
+    pub fn clear_workspace_progress(&self, workspace: &str) -> bool {
+        let changed = self.workspace_state.write().clear_progress(workspace);
+        if changed {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+        changed
+    }
+
+    pub fn workspace_progress_for_workspace(
+        &self,
+        workspace: &str,
+    ) -> Option<WorkspaceProgressRecord> {
+        self.workspace_state
+            .read()
+            .progress_for_workspace(workspace)
+    }
+
+    pub fn list_workspace_progress(&self) -> Vec<WorkspaceProgressRecord> {
+        self.workspace_state.read().list_progress()
+    }
+
+    pub fn append_workspace_log(&self, workspace: &str, message: &str) -> WorkspaceLogRecord {
+        let record = self.workspace_state.write().append_log(workspace, message);
+        self.notify(MuxNotification::WorkspaceMetadataChanged);
+        record
+    }
+
+    pub fn clear_workspace_log(&self, workspace: &str) -> bool {
+        let changed = self.workspace_state.write().clear_log(workspace);
+        if changed {
+            self.notify(MuxNotification::WorkspaceMetadataChanged);
+        }
+        changed
+    }
+
+    pub fn list_workspace_log(&self, workspace: &str) -> Vec<WorkspaceLogRecord> {
+        self.workspace_state.read().list_log(workspace)
+    }
+
+    pub fn list_workspace_log_workspaces(&self) -> Vec<String> {
+        self.workspace_state.read().list_log_workspaces()
+    }
+
+    pub fn record_task_pane_exit(
+        &self,
+        pane_id: PaneId,
+        exit_behavior: ExitBehavior,
+        success: bool,
+        killed: bool,
+        current_working_dir: Option<String>,
+        user_vars: &HashMap<String, String>,
+    ) -> Option<TaskPaneRecord> {
+        let remain_on_exit = matches!(exit_behavior, ExitBehavior::Hold) && !killed;
+        let is_failed = !success;
+        let existing = self.task_panes.read().task_pane(pane_id);
+        let rerun = {
+            let rerun = rerun_metadata_from_user_vars(user_vars);
+            if rerun.is_empty() {
+                existing
+                    .as_ref()
+                    .map(|record| record.rerun.clone())
+                    .unwrap_or_default()
+            } else {
+                rerun
+            }
+        };
+
+        if !remain_on_exit && !is_failed && rerun.is_empty() {
+            self.task_panes.write().remove_task_pane(pane_id);
+            return None;
+        }
+
+        let (workspace, window_id, tab_id) = existing
+            .map(|record| (record.workspace, record.window_id, record.tab_id))
+            .unwrap_or((None, None, None));
+        let record = self.task_panes.write().record_exit(TaskPaneExitRecord {
+            pane_id,
+            workspace,
+            window_id,
+            tab_id,
+            remain_on_exit,
+            is_failed,
+            exit_behavior,
+            current_working_dir,
+            rerun,
+        });
+        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        Some(record)
+    }
+
+    pub fn set_task_pane_remain_on_exit(
+        &self,
+        pane_id: PaneId,
+        remain_on_exit: bool,
+    ) -> Option<TaskPaneRecord> {
+        let pane = self.get_pane(pane_id)?;
+        let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
+        let silenced = self
+            .task_panes
+            .read()
+            .task_pane(pane_id)
+            .map(|record| record.silenced)
+            .unwrap_or(false);
+        let mut task_panes = self.task_panes.write();
+        task_panes.upsert_live(
+            pane_id,
+            workspace,
+            window_id,
+            tab_id,
+            remain_on_exit,
+            silenced,
+        );
+        let current_working_dir = pane
+            .get_current_working_dir(CachePolicy::AllowStale)
+            .map(|url| url.to_string());
+        let user_vars = pane.copy_user_vars();
+        let rerun = rerun_metadata_from_user_vars(&user_vars);
+        let record = task_panes.refresh_live_metadata(pane_id, current_working_dir, rerun)?;
+        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        Some(record)
+    }
+
+    pub fn task_pane_remain_on_exit(&self, pane_id: PaneId) -> Option<bool> {
+        self.task_pane_record(pane_id).map(|record| record.remain_on_exit)
+    }
+
+    pub fn set_task_pane_silenced(
+        &self,
+        pane_id: PaneId,
+        silenced: bool,
+    ) -> Option<TaskPaneRecord> {
+        let existing = self.task_panes.read().task_pane(pane_id);
+        let record = if existing.is_some() {
+            let mut task_panes = self.task_panes.write();
+            task_panes.set_silenced(pane_id, silenced);
+            task_panes.task_pane(pane_id)
+        } else {
+            let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
+            Some(self.task_panes.write().upsert_live(
+                pane_id,
+                workspace,
+                window_id,
+                tab_id,
+                false,
+                silenced,
+            ))
+        }?;
+        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        Some(record)
+    }
+
+    pub fn set_task_pane_tee_path(
+        &self,
+        pane_id: PaneId,
+        tee_path: Option<String>,
+    ) -> Option<TaskPaneRecord> {
+        let existing = self.task_panes.read().task_pane(pane_id);
+        let record = if existing.is_some() {
+            let mut task_panes = self.task_panes.write();
+            task_panes.set_tee_path(pane_id, tee_path);
+            task_panes.task_pane(pane_id)
+        } else {
+            let pane = self.get_pane(pane_id)?;
+            let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
+            let remain_on_exit = false;
+            let silenced = false;
+            let mut task_panes = self.task_panes.write();
+            task_panes.upsert_live(
+                pane_id,
+                workspace,
+                window_id,
+                tab_id,
+                remain_on_exit,
+                silenced,
+            );
+            let current_working_dir = pane
+                .get_current_working_dir(CachePolicy::AllowStale)
+                .map(|url| url.to_string());
+            let user_vars = pane.copy_user_vars();
+            let rerun = rerun_metadata_from_user_vars(&user_vars);
+            let _ = task_panes.refresh_live_metadata(pane_id, current_working_dir, rerun);
+            let _ = task_panes.set_tee_path(pane_id, tee_path);
+            task_panes.task_pane(pane_id)
+        }?;
+        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
+        Some(record)
+    }
+
+    pub fn list_task_panes(&self) -> Vec<TaskPaneRecord> {
+        self.task_panes.read().list_task_panes()
+    }
+
+    pub fn task_pane_record(&self, pane_id: PaneId) -> Option<TaskPaneRecord> {
+        self.task_panes.read().task_pane(pane_id)
+    }
+
+    fn task_pane_command_dir(path: Option<&str>) -> Option<String> {
+        let path = path?;
+        if let Ok(url) = url::Url::parse(path) {
+            if let Ok(path) = url.to_file_path() {
+                return Some(path.to_string_lossy().into_owned());
+            }
+        }
+        Some(path.to_string())
+    }
+
+    fn task_pane_rerun_command(record: &TaskPaneRecord) -> Option<String> {
+        record
+            .rerun
+            .get("KAKU_RERUN_COMMAND")
+            .or_else(|| record.rerun.get("kaku.rerun.command"))
+            .cloned()
+    }
+
+    async fn spawn_task_pane_from_record(
+        &self,
+        pane_id: PaneId,
+        status: &str,
+    ) -> anyhow::Result<(PaneId, String)> {
+        let record = self
+            .task_pane_record(pane_id)
+            .ok_or_else(|| anyhow!("no task-pane record for pane {}", pane_id))?;
+        let command = Self::task_pane_rerun_command(&record)
+            .ok_or_else(|| anyhow!("no rerun metadata for pane {}", pane_id))?;
+        let command = CommandBuilder::from_argv(vec![
+            OsString::from("/bin/sh"),
+            OsString::from("-lc"),
+            OsString::from(command),
+        ]);
+        let workspace = record
+            .workspace
+            .clone()
+            .unwrap_or_else(|| self.get_default_workspace());
+        let window_id = record
+            .window_id
+            .filter(|window_id| self.get_window(*window_id).is_some());
+        let current_pane_id = self.get_pane(pane_id).map(|_| pane_id);
+        let size = configuration().initial_size(0, None);
+        let (_, pane, _) = self
+            .spawn_tab_or_window(
+                window_id,
+                SpawnTabDomain::CurrentPaneDomain,
+                Some(command),
+                Self::task_pane_command_dir(record.current_working_dir.as_deref()),
+                None,
+                size,
+                current_pane_id,
+                workspace,
+                None,
+            )
+            .await?;
+        Ok((pane.pane_id(), status.to_string()))
+    }
+
+    pub async fn rerun_task_pane(&self, pane_id: PaneId) -> anyhow::Result<(PaneId, String)> {
+        self.spawn_task_pane_from_record(pane_id, "rerun").await
+    }
+
+    pub async fn respawn_task_pane(&self, pane_id: PaneId) -> anyhow::Result<(PaneId, String)> {
+        self.spawn_task_pane_from_record(pane_id, "respawned").await
+    }
+
+    pub fn task_center_snapshot(&self) -> Vec<TaskCenterEntry> {
+        let workspaces = self.iter_workspaces();
+        let statuses = self.list_workspace_status();
+        let progresses = self.list_workspace_progress();
+        let log_workspaces = self.list_workspace_log_workspaces();
+        let task_panes = self.list_task_panes();
+        let notifications = self.list_notifications();
+        let notification_anchor_panes = notifications
+            .iter()
+            .filter_map(|record| {
+                self.notification_anchor_pane_id(&record.notification_id)
+                    .map(|pane_id| (record.notification_id.clone(), pane_id))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let mut window_ids = self.iter_windows();
+        window_ids.sort_unstable();
+        let windows = window_ids
+            .into_iter()
+            .filter_map(|window_id| {
+                let window = self.get_window(window_id)?;
+                let workspace = window.get_workspace().to_string();
+                let tabs = window
+                    .iter()
+                    .map(|tab| {
+                        let panes = tab
+                            .iter_panes_ignoring_zoom()
+                            .into_iter()
+                            .map(|pos| TaskCenterPaneSnapshot {
+                                pane_id: pos.pane.pane_id(),
+                                title: pos.pane.get_title(),
+                                progress: pos.pane.get_progress(),
+                                is_dead: pos.pane.is_dead(),
+                                user_vars: pos.pane.copy_user_vars(),
+                            })
+                            .collect::<Vec<_>>();
+                        TaskCenterTabSnapshot {
+                            tab_id: tab.tab_id(),
+                            title: tab.get_title(),
+                            panes,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                Some(TaskCenterWindowSnapshot {
+                    window_id,
+                    workspace,
+                    tabs,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        build_task_center_entries(
+            &workspaces,
+            &statuses,
+            &progresses,
+            &log_workspaces,
+            &task_panes,
+            &notifications,
+            &notification_anchor_panes,
+            &windows,
+        )
+    }
+
     pub fn clear_notifications(&self, notification_ids: &[String]) -> usize {
         let cleared = self
             .notification_store
@@ -1481,7 +1931,10 @@ impl Mux {
     pub fn notification_unread_count_for_tab(&self, tab_id: TabId) -> usize {
         let workspace = self
             .window_containing_tab(tab_id)
-            .and_then(|window_id| self.get_window(window_id).map(|window| window.get_workspace().to_string()))
+            .and_then(|window_id| {
+                self.get_window(window_id)
+                    .map(|window| window.get_workspace().to_string())
+            })
             .unwrap_or_else(|| self.active_workspace());
         let pane_ids = self
             .get_tab(tab_id)
@@ -1877,7 +2330,10 @@ impl Mux {
             (window_id, size)
         } else {
             term_config = None;
-            window_builder = self.new_empty_window(Some(workspace_for_new_window), window_position);
+            window_builder = self.new_empty_window(
+                Some(workspace_for_new_window.clone()),
+                window_position,
+            );
             // Notify immediately so GUI can materialize the window while
             // the shell/domain spawn work is still in progress.
             window_builder.notify();
@@ -1934,6 +2390,33 @@ impl Mux {
         if let Some(config) = term_config {
             pane.set_config(config);
         }
+
+        let task_workspace = self
+            .get_window(window_id)
+            .map(|window| window.get_workspace().to_string())
+            .unwrap_or_else(|| workspace_for_new_window.clone());
+        let current_working_dir = pane
+            .get_current_working_dir(CachePolicy::AllowStale)
+            .map(|url| url.to_string());
+        let mut rerun = rerun_metadata_from_user_vars(&pane.copy_user_vars());
+        if rerun.is_empty() {
+            if let Some(command) = command.as_ref() {
+                rerun = rerun_metadata_from_command_builder(command);
+            }
+        }
+        {
+            let mut task_panes = self.task_panes.write();
+            task_panes.upsert_live(
+                pane.pane_id(),
+                Some(task_workspace),
+                Some(window_id),
+                Some(tab.tab_id()),
+                false,
+                false,
+            );
+            let _ = task_panes.refresh_live_metadata(pane.pane_id(), current_working_dir, rerun);
+        }
+        self.notify(MuxNotification::TaskPaneLifecycleChanged(pane.pane_id()));
 
         // FIXME: clipboard?
 
@@ -2011,5 +2494,182 @@ impl wezterm_term::DownloadHandler for MuxDownloader {
                 data: Arc::new(data),
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tab::TabId;
+    use std::collections::HashMap;
+
+    fn metadata_change_count(events: &[MuxNotification]) -> usize {
+        events
+            .iter()
+            .filter(|event| matches!(event, MuxNotification::WorkspaceMetadataChanged))
+            .count()
+    }
+
+    #[test]
+    fn workspace_state_wrappers_expose_store_operations() {
+        let mux = Mux::new(None);
+
+        assert!(mux.set_workspace_status("unity-main", "running"));
+        assert!(mux
+            .set_workspace_progress("unity-main", 64)
+            .expect("progress should set"));
+        let log = mux.append_workspace_log("unity-main", "build started");
+
+        let status = mux
+            .workspace_status_for_workspace("unity-main")
+            .expect("status record");
+        assert_eq!(status.status, "running");
+
+        let progress = mux
+            .workspace_progress_for_workspace("unity-main")
+            .expect("progress record");
+        assert_eq!(progress.value, 64);
+
+        let statuses = mux.list_workspace_status();
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].workspace, "unity-main");
+
+        let logs = mux.list_workspace_log("unity-main");
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].seq, log.seq);
+        assert_eq!(logs[0].message, "build started");
+
+        assert!(mux.clear_workspace_status("unity-main"));
+        assert!(mux.clear_workspace_progress("unity-main"));
+        assert!(mux.clear_workspace_log("unity-main"));
+        assert_eq!(mux.workspace_status_for_workspace("unity-main"), None);
+        assert_eq!(mux.workspace_progress_for_workspace("unity-main"), None);
+        assert!(mux.list_workspace_log("unity-main").is_empty());
+    }
+
+    #[test]
+    fn workspace_state_mutations_emit_events_only_when_the_store_changes() {
+        let mux = Mux::new(None);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&events);
+        mux.subscribe(move |notification| {
+            captured.lock().push(notification);
+            true
+        });
+
+        assert!(mux.set_workspace_status("unity-main", "running"));
+        assert!(!mux.set_workspace_status("unity-main", "running"));
+        assert!(mux
+            .set_workspace_progress("unity-main", 40)
+            .expect("progress should set"));
+        assert!(!mux
+            .set_workspace_progress("unity-main", 40)
+            .expect("same progress should not change"));
+        mux.append_workspace_log("unity-main", "log-1");
+        assert!(mux.clear_workspace_status("unity-main"));
+        assert!(!mux.clear_workspace_status("unity-main"));
+        assert!(mux.clear_workspace_progress("unity-main"));
+        assert!(!mux.clear_workspace_progress("unity-main"));
+        assert!(mux.clear_workspace_log("unity-main"));
+        assert!(!mux.clear_workspace_log("unity-main"));
+
+        let events = events.lock();
+        assert_eq!(metadata_change_count(&events), 6);
+    }
+
+    #[test]
+    fn workspace_state_rename_workspace_propagates_metadata_and_emits_metadata_change() {
+        let mux = Mux::new(None);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = Arc::clone(&events);
+        mux.subscribe(move |notification| {
+            captured.lock().push(notification);
+            true
+        });
+
+        mux.set_workspace_status("old-name", "running");
+        mux.set_workspace_progress("old-name", 55)
+            .expect("progress should set");
+        mux.append_workspace_log("old-name", "first");
+        events.lock().clear();
+
+        mux.rename_workspace("old-name", "new-name");
+
+        let status = mux
+            .workspace_status_for_workspace("new-name")
+            .expect("renamed status");
+        assert_eq!(status.status, "running");
+        let progress = mux
+            .workspace_progress_for_workspace("new-name")
+            .expect("renamed progress");
+        assert_eq!(progress.value, 55);
+        let logs = mux.list_workspace_log("new-name");
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].message, "first");
+
+        let events = events.lock();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            MuxNotification::WorkspaceRenamed {
+                old_workspace,
+                new_workspace
+            } if old_workspace == "old-name" && new_workspace == "new-name"
+        )));
+        assert_eq!(metadata_change_count(&events), 1);
+    }
+
+    #[test]
+    fn record_task_pane_exit_keeps_failed_records_queryable_until_explicit_cleanup() {
+        let mux = Mux::new(None);
+        let pane_id = PaneId::new(42);
+        let mut rerun = HashMap::new();
+        rerun.insert(
+            "KAKU_RERUN_COMMAND".to_string(),
+            "/bin/sh -lc 'echo PHASE4_FAILING_TASK; false'".to_string(),
+        );
+
+        {
+            let mut task_panes = mux.task_panes.write();
+            task_panes.upsert_live(
+                pane_id,
+                Some("unity-main".to_string()),
+                Some(7),
+                Some(TabId::new(9)),
+                false,
+                false,
+            );
+            let _ = task_panes.refresh_live_metadata(
+                pane_id,
+                Some("file:///tmp/unity-main".to_string()),
+                rerun,
+            );
+        }
+
+        let record = mux
+            .record_task_pane_exit(
+                pane_id,
+                ExitBehavior::CloseOnCleanExit,
+                false,
+                false,
+                Some("file:///tmp/unity-main".to_string()),
+                &HashMap::new(),
+            )
+            .expect("failed pane should stay queryable");
+
+        assert!(record.is_dead);
+        assert!(record.is_failed);
+        assert_eq!(record.workspace.as_deref(), Some("unity-main"));
+        assert_eq!(
+            mux.task_pane_record(pane_id)
+                .and_then(|record| record.rerun.get("KAKU_RERUN_COMMAND").cloned()),
+            Some("/bin/sh -lc 'echo PHASE4_FAILING_TASK; false'".to_string())
+        );
+        assert_eq!(mux.list_task_panes().len(), 1);
+
+        {
+            let mut task_panes = mux.task_panes.write();
+            assert_eq!(task_panes.prune_missing(&HashSet::new()), 1);
+        }
+        assert!(mux.task_pane_record(pane_id).is_none());
     }
 }
