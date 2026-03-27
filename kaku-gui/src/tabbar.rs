@@ -201,21 +201,29 @@ fn pane_cwd_title(pane: &PaneInformation) -> Option<String> {
 }
 
 pub fn compute_tab_plain_title(tab: &TabInformation) -> String {
-    if !tab.tab_title.is_empty() {
-        return tab.tab_title.clone();
-    }
-
-    if let Some(pane) = &tab.active_pane {
+    let base_title = if !tab.tab_title.is_empty() {
+        tab.tab_title.clone()
+    } else if let Some(pane) = &tab.active_pane {
         if let Some(title) = pane_cwd_title(pane) {
-            return title;
+            title
+        } else if let Some(ssh_host) = ssh_destination_for_pane(pane) {
+            ssh_host
+        } else {
+            pane.title.clone()
         }
-        if let Some(ssh_host) = ssh_destination_for_pane(pane) {
-            return ssh_host;
-        }
-        return pane.title.clone();
-    }
+    } else {
+        "no pane".to_string()
+    };
 
-    "no pane".to_string()
+    prefix_unread_marker(tab, base_title)
+}
+
+fn prefix_unread_marker(tab: &TabInformation, title: String) -> String {
+    if tab.unread_notification_count > 0 {
+        format!("! {title}")
+    } else {
+        title
+    }
 }
 
 fn build_default_title(
@@ -227,7 +235,7 @@ fn build_default_title(
 ) -> TitleText {
     let mut items = vec![];
     let mut len = 0;
-    let mut title = title.to_string();
+    let mut title = prefix_unread_marker(tab, title.to_string());
 
     let classic_spacing = if config.use_fancy_tab_bar { "" } else { " " };
     if with_tab_index && config.show_tab_index_in_tab_bar {
@@ -964,6 +972,7 @@ pub fn parse_status_text(text: &str, default_cell: CellAttributes) -> Line {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::termwindow::TabInformation;
 
     #[test]
     fn parse_plain_ssh_target() {
@@ -984,5 +993,50 @@ mod test {
     #[test]
     fn ignore_non_ssh_command() {
         assert!(ssh_target_from_command("ls -la").is_none());
+    }
+
+    fn sample_tab(unread_notification_count: usize) -> TabInformation {
+        TabInformation {
+            tab_id: mux::tab::TabId::from(1usize),
+            tab_index: 0,
+            is_active: true,
+            is_last_active: true,
+            active_pane: None,
+            window_id: 1,
+            tab_title: String::new(),
+            has_unread_notifications: unread_notification_count > 0,
+            unread_notification_count,
+            workspace_status: None,
+            workspace_progress: None,
+        }
+    }
+
+    #[test]
+    fn compute_tab_plain_title_prefixes_unread_marker_when_notifications_exist() {
+        let tab = sample_tab(2);
+        assert_eq!(compute_tab_plain_title(&tab), "! no pane");
+    }
+
+    #[test]
+    fn compute_tab_plain_title_keeps_existing_behavior_without_unread_notifications() {
+        let tab = sample_tab(0);
+        assert_eq!(compute_tab_plain_title(&tab), "no pane");
+    }
+
+    #[test]
+    fn build_default_title_prefixes_unread_marker_for_runtime_tabbar_path() {
+        let tab = sample_tab(1);
+        let config = config::ConfigHandle::default_config();
+        let title = build_default_title(&tab, &config, "shell", true, false);
+        let rendered = title
+            .items
+            .into_iter()
+            .filter_map(|item| match item {
+                FormatItem::Text(text) => Some(text),
+                _ => None,
+            })
+            .collect::<String>();
+
+        assert!(rendered.contains("! shell"));
     }
 }

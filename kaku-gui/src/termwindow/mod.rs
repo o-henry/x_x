@@ -597,6 +597,10 @@ pub struct TabInformation {
     pub active_pane: Option<PaneInformation>,
     pub window_id: MuxWindowId,
     pub tab_title: String,
+    pub has_unread_notifications: bool,
+    pub unread_notification_count: usize,
+    pub workspace_status: Option<String>,
+    pub workspace_progress: Option<u8>,
 }
 
 impl UserData for TabInformation {
@@ -626,6 +630,16 @@ impl UserData for TabInformation {
         });
         fields.add_field_method_get("window_id", |_, this| Ok(this.window_id));
         fields.add_field_method_get("tab_title", |_, this| Ok(this.tab_title.clone()));
+        fields.add_field_method_get("has_unread_notifications", |_, this| {
+            Ok(this.has_unread_notifications)
+        });
+        fields.add_field_method_get("unread_notification_count", |_, this| {
+            Ok(this.unread_notification_count)
+        });
+        fields.add_field_method_get("workspace_status", |_, this| {
+            Ok(this.workspace_status.clone())
+        });
+        fields.add_field_method_get("workspace_progress", |_, this| Ok(this.workspace_progress));
         fields.add_field_method_get("window_title", |_, this| {
             let mux = Mux::get();
             let window = mux.get_window(this.window_id).ok_or_else(|| {
@@ -2061,6 +2075,13 @@ impl TermWindow {
                     // Also handled by clientpane
                     self.update_title_post_status();
                 }
+                MuxNotification::NotificationsChanged => {
+                    self.update_title_post_status();
+                }
+                MuxNotification::WorkspaceMetadataChanged => {
+                    self.emit_status_event();
+                    self.update_title();
+                }
                 MuxNotification::TabResized(_) => {
                     // Also handled by wezterm-client
                     self.update_title_post_status();
@@ -2338,6 +2359,7 @@ impl TermWindow {
                         }
                     }
                 }
+                MuxNotification::NotificationsChanged | MuxNotification::WorkspaceMetadataChanged => {}
                 // Global notifications not relevant to individual windows
                 MuxNotification::AssignClipboard { .. }
                 | MuxNotification::SaveToDownloads { .. }
@@ -2363,6 +2385,18 @@ impl TermWindow {
     fn emit_status_event(&mut self) {
         self.emit_window_event("update-right-status", None);
         self.emit_window_event("update-status", None);
+    }
+
+    fn mux_notification_requires_tabbar_refresh(notification: &MuxNotification) -> bool {
+        matches!(
+            notification,
+            MuxNotification::PaneFocused(_)
+                | MuxNotification::TabResized(_)
+                | MuxNotification::TabTitleChanged { .. }
+                | MuxNotification::WindowInvalidated(_)
+                | MuxNotification::NotificationsChanged
+                | MuxNotification::WorkspaceMetadataChanged
+        )
     }
 
     fn schedule_window_event(&mut self, name: &str, pane_id: Option<PaneId>) {
@@ -2502,14 +2536,47 @@ impl TermWindow {
     /// Decide whether the tab bar should be visible based on tab count,
     /// fullscreen state, and config.
     fn should_show_tab_bar(&self, num_tabs: usize) -> bool {
-        let is_full_screen = self.layout_is_effective_fullscreen();
-        if is_full_screen {
-            // Always show tab bar in fullscreen mode to display the right status (time)
-            self.config.enable_tab_bar
-        } else if num_tabs == 1 {
-            self.config.enable_tab_bar && !self.config.hide_tab_bar_if_only_one_tab
+        let has_unread_notifications = self.window_has_unread_notifications();
+        Self::should_show_tab_bar_impl(
+            self.config.enable_tab_bar,
+            self.config.hide_tab_bar_if_only_one_tab,
+            self.layout_is_effective_fullscreen(),
+            num_tabs,
+            has_unread_notifications,
+        )
+    }
+
+    fn window_has_unread_notifications(&self) -> bool {
+        let mux = Mux::get();
+        let Some(window) = mux.get_window(self.mux_window_id) else {
+            return false;
+        };
+
+        let has_unread_notifications = window
+            .iter()
+            .any(|tab| mux.notification_unread_count_for_tab(tab.tab_id()) > 0);
+        has_unread_notifications
+    }
+
+    fn should_show_tab_bar_impl(
+        enable_tab_bar: bool,
+        hide_tab_bar_if_only_one_tab: bool,
+        is_full_screen: bool,
+        num_tabs: usize,
+        has_unread_notifications: bool,
+    ) -> bool {
+        if !enable_tab_bar {
+            return false;
+        }
+
+        if is_full_screen || has_unread_notifications {
+            return true;
+        }
+
+        if num_tabs == 1 {
+            !hide_tab_bar_if_only_one_tab
         } else {
-            self.config.enable_tab_bar
+            true
         }
     }
 
@@ -5274,6 +5341,14 @@ impl TermWindow {
             .enumerate()
             .map(|(idx, tab)| {
                 let panes = self.get_pos_panes_for_tab(tab);
+                let unread_notification_count = mux.notification_unread_count_for_tab(tab.tab_id());
+                let workspace = window.get_workspace();
+                let workspace_status = mux
+                    .workspace_status_for_workspace(workspace)
+                    .map(|record| record.status);
+                let workspace_progress = mux
+                    .workspace_progress_for_workspace(workspace)
+                    .map(|record| record.value);
 
                 TabInformation {
                     tab_index: idx,
@@ -5285,6 +5360,10 @@ impl TermWindow {
                         .unwrap_or(false),
                     window_id: self.mux_window_id,
                     tab_title: tab.get_title(),
+                    has_unread_notifications: unread_notification_count > 0,
+                    unread_notification_count,
+                    workspace_status,
+                    workspace_progress,
                     active_pane: panes
                         .iter()
                         .find(|p| p.is_active)
@@ -5439,7 +5518,9 @@ impl Drop for TermWindow {
 #[cfg(test)]
 mod tests {
     use super::{bell_notification_message, InputBroadcastMode, RenderableDimensions, TermWindow};
+    use mlua::AnyUserDataExt;
     use mux::tab::TabId;
+    use mux::MuxNotification;
     use wezterm_term::StableRowIndex;
 
     #[test]
@@ -5584,5 +5665,73 @@ mod tests {
             bell_notification_message(Some("   "), Some("wezterm"), "kaku", None),
             "Bell from a background pane"
         );
+    }
+
+    #[test]
+    fn tab_information_lua_fields_include_unread_notification_state() {
+        let lua = mlua::Lua::new();
+        let ud = lua
+            .create_userdata(super::TabInformation {
+                tab_id: TabId::from(1usize),
+                tab_index: 0,
+                is_active: true,
+                is_last_active: true,
+                active_pane: None,
+                window_id: 1,
+                tab_title: String::new(),
+                has_unread_notifications: true,
+                unread_notification_count: 3,
+                workspace_status: Some("blocked".to_string()),
+                workspace_progress: Some(37),
+            })
+            .expect("userdata");
+
+        assert_eq!(
+            ud.get::<_, bool>("has_unread_notifications")
+                .expect("bool field"),
+            true
+        );
+        assert_eq!(
+            ud.get::<_, usize>("unread_notification_count")
+                .expect("count field"),
+            3
+        );
+        assert_eq!(
+            ud.get::<_, Option<String>>("workspace_status")
+                .expect("status field"),
+            Some("blocked".to_string())
+        );
+        assert_eq!(
+            ud.get::<_, Option<u8>>("workspace_progress")
+                .expect("progress field"),
+            Some(37)
+        );
+    }
+
+    #[test]
+    fn notifications_changed_requests_tabbar_refresh() {
+        assert!(TermWindow::mux_notification_requires_tabbar_refresh(
+            &MuxNotification::NotificationsChanged
+        ));
+        assert!(TermWindow::mux_notification_requires_tabbar_refresh(
+            &MuxNotification::WorkspaceMetadataChanged
+        ));
+        assert!(!TermWindow::mux_notification_requires_tabbar_refresh(
+            &MuxNotification::Empty
+        ));
+    }
+
+    #[test]
+    fn single_tab_with_unread_notifications_forces_tab_bar_visible() {
+        assert!(TermWindow::should_show_tab_bar_impl(
+            true, true, false, 1, true
+        ));
+    }
+
+    #[test]
+    fn single_tab_without_unread_notifications_still_respects_hide_setting() {
+        assert!(!TermWindow::should_show_tab_bar_impl(
+            true, true, false, 1, false
+        ));
     }
 }
