@@ -2143,6 +2143,18 @@ mod test {
             workspace: None,
         }));
         assert_round_trip(Pdu::ClearWorkspaceProgressResponse(clear_progress));
+        assert_round_trip(Pdu::ListWorkspaceProgress(ListWorkspaceProgress {
+            workspace: Some("unity-main".to_string()),
+        }));
+        assert_round_trip(Pdu::ListWorkspaceProgressResponse(
+            ListWorkspaceProgressResponse {
+                progress: vec![WorkspaceProgressState {
+                    workspace: "unity-main".to_string(),
+                    value: 42,
+                    updated_at: "2026-03-27T00:00:01Z".to_string(),
+                }],
+            },
+        ));
         assert_round_trip(Pdu::AppendWorkspaceLog(AppendWorkspaceLog {
             workspace: "unity-main".to_string(),
             message: "tests passed".to_string(),
