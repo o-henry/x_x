@@ -5,7 +5,9 @@ use crate::termwindow::render::corners::{
     TOP_RIGHT_ROUNDED_CORNER,
 };
 use crate::termwindow::render::forces_opaque_kaku_tui_window_background;
-use crate::termwindow::{DimensionContext, RenderFrame, TermWindowNotif};
+use crate::termwindow::{
+    DimensionContext, OperatorNavItem, RenderFrame, TermWindowNotif, UIItemType,
+};
 use crate::utilsprites::RenderMetrics;
 use ::window::bitmaps::atlas::OutOfTextureSpace;
 use ::window::WindowOps;
@@ -25,6 +27,13 @@ pub enum AllowImage {
 
 const STATUS_DOT_SIZE: f32 = 14.0;
 const BROADCAST_ICON_SIZE: f32 = 24.0;
+const OPERATOR_NAV_PANEL_BG: LinearRgba = LinearRgba::with_components(0.082, 0.080, 0.096, 0.98);
+const OPERATOR_NAV_BORDER: LinearRgba = LinearRgba::with_components(0.88, 0.88, 0.96, 0.07);
+const OPERATOR_NAV_TEXT: LinearRgba = LinearRgba::with_components(0.82, 0.82, 0.87, 1.0);
+const OPERATOR_NAV_DIM: LinearRgba = LinearRgba::with_components(0.46, 0.46, 0.53, 1.0);
+const OPERATOR_NAV_ACTIVE_BG: LinearRgba = LinearRgba::with_components(0.19, 0.20, 0.25, 1.0);
+const OPERATOR_NAV_ACTIVE_TEXT: LinearRgba = LinearRgba::with_components(0.97, 0.97, 1.0, 1.0);
+const OPERATOR_NAV_ACCENT: LinearRgba = LinearRgba::with_components(0.67, 0.71, 0.92, 1.0);
 
 static ACTIVE_PANE_INDICATOR_POLY: &[Poly] = &[Poly {
     path: &[PolyCommand::Circle {
@@ -88,6 +97,224 @@ fn toast_colors_for_palette(
 }
 
 impl crate::TermWindow {
+    fn operator_nav_counts(&mut self) -> Vec<(OperatorNavItem, usize)> {
+        let entries = self.task_center_entries();
+        OperatorNavItem::ordered()
+            .iter()
+            .copied()
+            .map(|item| {
+                let count = match item {
+                    OperatorNavItem::Home => entries.len(),
+                    OperatorNavItem::Inbox => entries
+                        .iter()
+                        .filter(|entry| entry.unread_count > 0)
+                        .count(),
+                    OperatorNavItem::Running => {
+                        entries.iter().filter(|entry| entry.is_running).count()
+                    }
+                    OperatorNavItem::Failed => {
+                        entries.iter().filter(|entry| entry.is_failed).count()
+                    }
+                    OperatorNavItem::Metadata => entries
+                        .iter()
+                        .filter(|entry| {
+                            entry.workspace_status.as_ref().is_some()
+                                || entry.workspace_progress.is_some()
+                        })
+                        .count(),
+                    OperatorNavItem::Tasks => entries
+                        .iter()
+                        .filter(|entry| {
+                            matches!(entry.kind, mux::task_center::TaskCenterKind::Pane)
+                        })
+                        .count(),
+                };
+                (item, count)
+            })
+            .collect()
+    }
+
+    fn paint_operator_nav(&mut self) -> anyhow::Result<()> {
+        if !self.operator_nav_enabled() {
+            return Ok(());
+        }
+
+        let nav_width = self.operator_nav_width_px() as f32;
+        let font = self.fonts.title_font()?;
+        let metrics = RenderMetrics::with_font_metrics(&font.metrics());
+        let border = self.get_os_border();
+        let tab_bar_height = if self.show_tab_bar && !self.config.tab_bar_at_bottom {
+            self.tab_bar_pixel_height().unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let top_inset = border.top.get() as f32 + tab_bar_height + 16.0;
+        let bottom_inset = border.bottom.get() as f32
+            + if self.show_tab_bar && self.config.tab_bar_at_bottom {
+                self.tab_bar_pixel_height().unwrap_or(0.0)
+            } else {
+                0.0
+            }
+            + 18.0;
+
+        let counts = self.operator_nav_counts();
+        let mut rows = Vec::with_capacity(counts.len());
+
+        for (item, count) in counts {
+            let is_active = item == self.operator_nav_selection;
+            let fg = if is_active {
+                OPERATOR_NAV_ACTIVE_TEXT
+            } else {
+                OPERATOR_NAV_TEXT
+            };
+            let bg = if is_active {
+                OPERATOR_NAV_ACTIVE_BG
+            } else {
+                LinearRgba::TRANSPARENT
+            };
+
+            let mut row = vec![
+                Element::new(&font, ElementContent::Text(item.icon().to_string())).colors(
+                    ElementColors {
+                        border: BorderColor::default(),
+                        bg: LinearRgba::TRANSPARENT.into(),
+                        text: fg.into(),
+                    },
+                ),
+            ];
+
+            if count > 0 {
+                row.push(
+                    Element::new(&font, ElementContent::Text(count.to_string()))
+                        .float(Float::Right)
+                        .colors(ElementColors {
+                            border: BorderColor::default(),
+                            bg: LinearRgba::TRANSPARENT.into(),
+                            text: if is_active {
+                                OPERATOR_NAV_ACCENT.into()
+                            } else {
+                                OPERATOR_NAV_DIM.into()
+                            },
+                        }),
+                );
+            }
+
+            rows.push(
+                Element::new(&font, ElementContent::Children(row))
+                    .item_type(UIItemType::OperatorNav(item))
+                    .display(DisplayType::Block)
+                    .min_width(Some(Dimension::Percent(1.0)))
+                    .colors(ElementColors {
+                        border: if is_active {
+                            BorderColor::new(OPERATOR_NAV_ACCENT.into())
+                        } else {
+                            BorderColor::default()
+                        },
+                        bg: bg.into(),
+                        text: fg.into(),
+                    })
+                    .hover_colors(Some(ElementColors {
+                        border: BorderColor::new(OPERATOR_NAV_ACCENT.into()),
+                        bg: LinearRgba::with_components(0.15, 0.16, 0.20, 1.0).into(),
+                        text: OPERATOR_NAV_ACTIVE_TEXT.into(),
+                    }))
+                    .padding(BoxDimension {
+                        left: Dimension::Cells(0.25),
+                        right: Dimension::Cells(0.35),
+                        top: Dimension::Cells(0.18),
+                        bottom: Dimension::Cells(0.18),
+                    })
+                    .margin(BoxDimension {
+                        left: Dimension::Cells(0.0),
+                        right: Dimension::Cells(0.0),
+                        top: Dimension::Cells(0.06),
+                        bottom: Dimension::Cells(0.06),
+                    })
+                    .border(BoxDimension {
+                        left: if is_active {
+                            Dimension::Pixels(2.0)
+                        } else {
+                            Dimension::Pixels(0.0)
+                        },
+                        right: Dimension::Pixels(0.0),
+                        top: Dimension::Pixels(0.0),
+                        bottom: Dimension::Pixels(0.0),
+                    })
+                    .border_corners(Some(Corners {
+                        top_left: SizedPoly {
+                            width: Dimension::Pixels(4.0),
+                            height: Dimension::Pixels(4.0),
+                            poly: TOP_LEFT_ROUNDED_CORNER,
+                        },
+                        top_right: SizedPoly {
+                            width: Dimension::Pixels(4.0),
+                            height: Dimension::Pixels(4.0),
+                            poly: TOP_RIGHT_ROUNDED_CORNER,
+                        },
+                        bottom_left: SizedPoly {
+                            width: Dimension::Pixels(4.0),
+                            height: Dimension::Pixels(4.0),
+                            poly: BOTTOM_LEFT_ROUNDED_CORNER,
+                        },
+                        bottom_right: SizedPoly {
+                            width: Dimension::Pixels(4.0),
+                            height: Dimension::Pixels(4.0),
+                            poly: BOTTOM_RIGHT_ROUNDED_CORNER,
+                        },
+                    })),
+            );
+        }
+
+        let strip_bounds = euclid::rect(0.0, 0.0, nav_width, self.dimensions.pixel_height as f32);
+
+        let element = Element::new(&font, ElementContent::Children(rows))
+            .colors(ElementColors {
+                border: BorderColor::new(OPERATOR_NAV_BORDER.into()),
+                bg: OPERATOR_NAV_PANEL_BG.into(),
+                text: OPERATOR_NAV_TEXT.into(),
+            })
+            .padding(BoxDimension {
+                left: Dimension::Pixels(8.0),
+                right: Dimension::Pixels(6.0),
+                top: Dimension::Pixels(top_inset),
+                bottom: Dimension::Pixels(bottom_inset),
+            })
+            .border(BoxDimension {
+                left: Dimension::Pixels(0.0),
+                right: Dimension::Pixels(1.0),
+                top: Dimension::Pixels(0.0),
+                bottom: Dimension::Pixels(0.0),
+            })
+            .min_width(Some(Dimension::Pixels(nav_width)))
+            .min_height(Some(Dimension::Pixels(self.dimensions.pixel_height as f32)));
+
+        let computed = self.compute_element(
+            &LayoutContext {
+                height: DimensionContext {
+                    dpi: self.dimensions.dpi as f32,
+                    pixel_max: self.dimensions.pixel_height as f32,
+                    pixel_cell: metrics.cell_size.height as f32,
+                },
+                width: DimensionContext {
+                    dpi: self.dimensions.dpi as f32,
+                    pixel_max: self.dimensions.pixel_width as f32,
+                    pixel_cell: metrics.cell_size.width as f32,
+                },
+                bounds: strip_bounds,
+                metrics: &metrics,
+                gl_state: self.render_state.as_ref().unwrap(),
+                zindex: 30,
+            },
+            &element,
+        )?;
+
+        let mut ui_items = computed.ui_items();
+        let gl_state = self.render_state.as_ref().unwrap();
+        self.render_element(&computed, gl_state, None)?;
+        self.ui_items.append(&mut ui_items);
+        Ok(())
+    }
+
     pub fn paint_impl(&mut self, frame: &mut RenderFrame) -> anyhow::Result<()> {
         self.num_frames += 1;
         // If nothing on screen needs animating, then we can avoid
@@ -595,6 +822,7 @@ impl crate::TermWindow {
         self.paint_window_borders(&mut layers)
             .context("paint_window_borders")?;
         drop(layers);
+        self.paint_operator_nav().context("paint_operator_nav")?;
         self.paint_modal().context("paint_modal")?;
         self.paint_toast().context("paint_toast")?;
 

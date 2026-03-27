@@ -1,10 +1,12 @@
 use crate::quad::TripleLayerQuadAllocator;
-use crate::termwindow::render::{forces_opaque_kaku_tui_window_background, RenderScreenLineParams};
+use crate::termwindow::render::{RenderScreenLineParams, forces_opaque_kaku_tui_window_background};
 use crate::utilsprites::RenderMetrics;
 use config::ConfigHandle;
 use mux::renderable::RenderableDimensions;
 use wezterm_term::color::ColorAttribute;
 use window::color::LinearRgba;
+
+pub(crate) const FANCY_TAB_BAR_HEIGHT_MULTIPLIER: f32 = 1.48;
 
 impl crate::TermWindow {
     pub fn paint_tab_bar(&mut self, layers: &mut TripleLayerQuadAllocator) -> anyhow::Result<()> {
@@ -171,7 +173,7 @@ impl crate::TermWindow {
     ) -> anyhow::Result<f32> {
         if config.use_fancy_tab_bar {
             let font = fontconfig.title_font()?;
-            Ok((font.metrics().cell_height.get() as f32 * 1.75).ceil())
+            Ok((font.metrics().cell_height.get() as f32 * FANCY_TAB_BAR_HEIGHT_MULTIPLIER).ceil())
         } else {
             Ok(render_metrics.cell_size.height as f32)
         }
@@ -180,4 +182,32 @@ impl crate::TermWindow {
     pub fn tab_bar_pixel_height(&self) -> anyhow::Result<f32> {
         Self::tab_bar_pixel_height_impl(&self.config, &self.fonts, &self.render_metrics)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::ConfigHandle;
+    use std::rc::Rc;
+    use wezterm_font::FontConfiguration;
+
+    #[test]
+    fn fancy_tabbar_height_uses_thinner_multiplier_than_phase_six() {
+        let config = ConfigHandle::default_config();
+        let fonts =
+            Rc::new(FontConfiguration::new(Some(config.clone()), 96).expect("font configuration"));
+        let render_metrics = RenderMetrics::new(&fonts).expect("render metrics");
+        let font = fonts.title_font().expect("title font");
+        let baseline_height = (font.metrics().cell_height.get() as f32 * 1.75).ceil();
+        let actual =
+            crate::TermWindow::tab_bar_pixel_height_impl(&config, fonts.as_ref(), &render_metrics)
+                .expect("tab bar height");
+
+        assert!(actual < baseline_height);
+        assert_eq!(
+            actual,
+            (font.metrics().cell_height.get() as f32 * FANCY_TAB_BAR_HEIGHT_MULTIPLIER).ceil()
+        );
+    }
+
 }

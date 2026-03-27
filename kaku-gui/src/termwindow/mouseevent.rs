@@ -1,7 +1,8 @@
 use crate::tabbar::TabBarItem;
 use crate::termwindow::tab_rename::TabRenameModal;
 use crate::termwindow::{
-    GuiWin, MouseCapture, PositionedSplit, ScrollHit, TermWindowNotif, UIItem, UIItemType, TMB,
+    GuiWin, MouseCapture, OperatorNavItem, PositionedSplit, ScrollHit, TermWindowNotif, UIItem,
+    UIItemType, TMB,
 };
 use ::window::{
     MouseButtons as WMB, MouseCursor, MouseEvent, MouseEventKind as WMEK, MousePress, WindowOps,
@@ -208,6 +209,7 @@ impl super::TermWindow {
             UIItemType::TabBar(_) => {
                 self.update_title_post_status();
             }
+            UIItemType::OperatorNav(_) => {}
             UIItemType::CloseTab(_)
             | UIItemType::AboveScrollThumb
             | UIItemType::BelowScrollThumb
@@ -219,6 +221,7 @@ impl super::TermWindow {
     fn enter_ui_item(&mut self, item: &UIItem) {
         match item.item_type {
             UIItemType::TabBar(_) => {}
+            UIItemType::OperatorNav(_) => {}
             UIItemType::CloseTab(_)
             | UIItemType::AboveScrollThumb
             | UIItemType::BelowScrollThumb
@@ -749,6 +752,9 @@ impl super::TermWindow {
             UIItemType::TabBar(tab_bar_item) => {
                 self.mouse_event_tab_bar(tab_bar_item, item, event, context);
             }
+            UIItemType::OperatorNav(nav_item) => {
+                self.mouse_event_operator_nav(nav_item, event, context);
+            }
             UIItemType::AboveScrollThumb => {
                 self.mouse_event_above_scroll_thumb(item, pane, event, context);
             }
@@ -764,6 +770,19 @@ impl super::TermWindow {
             UIItemType::CloseTab(idx) => {
                 self.mouse_event_close_tab(idx, event, context);
             }
+        }
+    }
+
+    fn mouse_event_operator_nav(
+        &mut self,
+        nav_item: OperatorNavItem,
+        event: MouseEvent,
+        context: &dyn WindowOps,
+    ) {
+        context.set_cursor(Some(MouseCursor::Hand));
+        if let WMEK::Press(MousePress::Left) = event.kind {
+            self.activate_operator_nav(nav_item);
+            context.invalidate();
         }
     }
 

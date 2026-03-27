@@ -10,8 +10,8 @@ use crate::utilsprites::RenderMetrics;
 use config::{Dimension, DimensionContext, TabBarColors};
 use std::rc::Rc;
 use wezterm_font::LoadedFont;
-use wezterm_term::color::{ColorAttribute, ColorPalette};
 use wezterm_term::Progress;
+use wezterm_term::color::{ColorAttribute, ColorPalette};
 use window::{IntegratedTitleButtonAlignment, IntegratedTitleButtonStyle};
 
 const X_BUTTON: &[Poly] = &[
@@ -62,6 +62,21 @@ const PROGRESS_CIRCLE_POLY: &[Poly] = &[Poly {
 }];
 
 const PROGRESS_DOT_SIZE: f32 = 14.0;
+const QUIET_BAR_LINE_HEIGHT: f64 = 1.42;
+const QUIET_TAB_LINE_HEIGHT: f64 = 1.52;
+const QUIET_TAB_TOP_MARGIN_CELLS: f32 = 0.08;
+const QUIET_TAB_TOP_PADDING_CELLS: f32 = 0.08;
+const QUIET_TAB_BOTTOM_PADDING_CELLS: f32 = 0.12;
+const QUIET_TAB_CORNER_CELLS: f32 = 0.24;
+const QUIET_TAB_HORIZONTAL_PADDING_EXTRA_PX: f32 = 1.0;
+const QUIET_OPERATOR_MARKER_MARGIN_LEFT_CELLS: f32 = 0.08;
+const QUIET_OPERATOR_MARKER_PADDING_X_CELLS: f32 = 0.28;
+const QUIET_OPERATOR_MARKER_PADDING_TOP_CELLS: f32 = 0.08;
+const QUIET_STATUS_LEFT_PADDING_CELLS: f32 = 0.35;
+
+fn quiet_tab_bottom_padding() -> Dimension {
+    Dimension::Cells(QUIET_TAB_BOTTOM_PADDING_CELLS)
+}
 
 impl crate::TermWindow {
     pub fn invalidate_fancy_tab_bar(&mut self) {
@@ -101,10 +116,11 @@ impl crate::TermWindow {
             .to_linear()
             .into(),
         };
-        let tab_bottom_padding = Dimension::Cells(0.25);
+        let tab_bottom_padding = quiet_tab_bottom_padding();
 
-        // Calculate horizontal padding for tabs: add extra 4px for better visual spacing
-        let tab_padding_h = Dimension::Pixels((0.5 * metrics.cell_size.width as f32) + 4.0);
+        let tab_padding_h = Dimension::Pixels(
+            (0.32 * metrics.cell_size.width as f32) + QUIET_TAB_HORIZONTAL_PADDING_EXTRA_PX,
+        );
 
         let item_to_elem = |item: &TabEntry| -> Element {
             let element = Element::with_line(&font, &item.title, palette);
@@ -131,7 +147,7 @@ impl crate::TermWindow {
             match item.item {
                 TabBarItem::RightStatus | TabBarItem::LeftStatus | TabBarItem::None => element
                     .item_type(UIItemType::TabBar(TabBarItem::None))
-                    .line_height(Some(1.75))
+                    .line_height(Some(QUIET_BAR_LINE_HEIGHT))
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.),
                         right: Dimension::Cells(0.),
@@ -139,7 +155,7 @@ impl crate::TermWindow {
                         bottom: Dimension::Cells(0.),
                     })
                     .padding(BoxDimension {
-                        left: Dimension::Cells(0.5),
+                        left: Dimension::Cells(QUIET_STATUS_LEFT_PADDING_CELLS),
                         right: Dimension::Cells(0.),
                         top: Dimension::Cells(0.),
                         bottom: Dimension::Cells(0.),
@@ -148,21 +164,25 @@ impl crate::TermWindow {
                     .colors(bar_colors.clone()),
                 TabBarItem::OperatorMarker { .. } => element
                     .item_type(UIItemType::TabBar(item.item.clone()))
-                    .line_height(Some(1.75))
+                    .line_height(Some(QUIET_BAR_LINE_HEIGHT))
                     .margin(BoxDimension {
-                        left: Dimension::Cells(0.),
+                        left: Dimension::Cells(QUIET_OPERATOR_MARKER_MARGIN_LEFT_CELLS),
                         right: Dimension::Cells(0.),
-                        top: Dimension::Cells(0.),
+                        top: Dimension::Cells(QUIET_TAB_TOP_MARGIN_CELLS),
                         bottom: Dimension::Cells(0.),
                     })
                     .padding(BoxDimension {
-                        left: Dimension::Cells(0.),
-                        right: Dimension::Cells(0.),
-                        top: Dimension::Cells(0.),
-                        bottom: Dimension::Cells(0.),
+                        left: Dimension::Cells(QUIET_OPERATOR_MARKER_PADDING_X_CELLS),
+                        right: Dimension::Cells(QUIET_OPERATOR_MARKER_PADDING_X_CELLS),
+                        top: Dimension::Cells(QUIET_OPERATOR_MARKER_PADDING_TOP_CELLS),
+                        bottom: tab_bottom_padding,
                     })
                     .border(BoxDimension::new(Dimension::Pixels(0.)))
-                    .colors(bar_colors.clone()),
+                    .colors(ElementColors {
+                        border: BorderColor::default(),
+                        bg: LinearRgba::with_components(1.0, 1.0, 1.0, 0.04).into(),
+                        text: bar_colors.text.clone(),
+                    }),
                 TabBarItem::NewTabButton => Element::new(
                     &font,
                     ElementContent::Poly {
@@ -177,18 +197,18 @@ impl crate::TermWindow {
                 .vertical_align(VerticalAlign::Middle)
                 .item_type(UIItemType::TabBar(item.item.clone()))
                 .margin(BoxDimension {
-                    left: Dimension::Cells(0.5),
+                    left: Dimension::Cells(0.24),
                     right: Dimension::Cells(0.),
-                    top: Dimension::Cells(0.2),
+                    top: Dimension::Cells(QUIET_TAB_TOP_MARGIN_CELLS),
                     bottom: Dimension::Cells(0.),
                 })
                 .padding(BoxDimension {
-                    left: Dimension::Cells(0.5),
-                    right: Dimension::Cells(0.5),
-                    top: Dimension::Cells(0.2),
+                    left: Dimension::Cells(0.32),
+                    right: Dimension::Cells(0.32),
+                    top: Dimension::Cells(QUIET_TAB_TOP_PADDING_CELLS),
                     bottom: tab_bottom_padding,
                 })
-                .border(BoxDimension::new(Dimension::Pixels(1.)))
+                .border(BoxDimension::new(Dimension::Pixels(0.)))
                 .colors(ElementColors {
                     border: BorderColor::default(),
                     bg: new_tab.bg_color.to_linear().into(),
@@ -202,39 +222,36 @@ impl crate::TermWindow {
                 TabBarItem::Tab { active, .. } if active => element
                     .vertical_align(VerticalAlign::Bottom)
                     .item_type(UIItemType::TabBar(item.item.clone()))
+                    .line_height(Some(QUIET_TAB_LINE_HEIGHT))
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.),
                         right: Dimension::Cells(0.),
-                        top: Dimension::Cells(0.2),
+                        top: Dimension::Cells(QUIET_TAB_TOP_MARGIN_CELLS),
                         bottom: Dimension::Cells(0.),
                     })
                     .padding(BoxDimension {
                         left: tab_padding_h,
                         right: tab_padding_h,
-                        top: Dimension::Cells(0.2),
+                        top: Dimension::Cells(QUIET_TAB_TOP_PADDING_CELLS),
                         bottom: tab_bottom_padding,
                     })
-                    .border(BoxDimension::new(Dimension::Pixels(1.)))
+                    .border(BoxDimension::new(Dimension::Pixels(0.)))
                     .border_corners(Some(Corners {
                         top_left: SizedPoly {
-                            width: Dimension::Cells(0.5),
-                            height: Dimension::Cells(0.5),
+                            width: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
+                            height: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
                             poly: TOP_LEFT_ROUNDED_CORNER,
                         },
                         top_right: SizedPoly {
-                            width: Dimension::Cells(0.5),
-                            height: Dimension::Cells(0.5),
+                            width: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
+                            height: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
                             poly: TOP_RIGHT_ROUNDED_CORNER,
                         },
                         bottom_left: SizedPoly::none(),
                         bottom_right: SizedPoly::none(),
                     }))
                     .colors(ElementColors {
-                        border: BorderColor::new(
-                            bg_color
-                                .unwrap_or_else(|| active_tab.bg_color.into())
-                                .to_linear(),
-                        ),
+                        border: BorderColor::default(),
                         bg: bg_color
                             .unwrap_or_else(|| active_tab.bg_color.into())
                             .to_linear()
@@ -247,28 +264,29 @@ impl crate::TermWindow {
                 TabBarItem::Tab { .. } => element
                     .vertical_align(VerticalAlign::Bottom)
                     .item_type(UIItemType::TabBar(item.item.clone()))
+                    .line_height(Some(QUIET_TAB_LINE_HEIGHT))
                     .margin(BoxDimension {
                         left: Dimension::Cells(0.),
                         right: Dimension::Cells(0.),
-                        top: Dimension::Cells(0.2),
+                        top: Dimension::Cells(QUIET_TAB_TOP_MARGIN_CELLS),
                         bottom: Dimension::Cells(0.),
                     })
                     .padding(BoxDimension {
                         left: tab_padding_h,
                         right: tab_padding_h,
-                        top: Dimension::Cells(0.2),
+                        top: Dimension::Cells(QUIET_TAB_TOP_PADDING_CELLS),
                         bottom: tab_bottom_padding,
                     })
-                    .border(BoxDimension::new(Dimension::Pixels(1.)))
+                    .border(BoxDimension::new(Dimension::Pixels(0.)))
                     .border_corners(Some(Corners {
                         top_left: SizedPoly {
-                            width: Dimension::Cells(0.5),
-                            height: Dimension::Cells(0.5),
+                            width: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
+                            height: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
                             poly: TOP_LEFT_ROUNDED_CORNER,
                         },
                         top_right: SizedPoly {
-                            width: Dimension::Cells(0.5),
-                            height: Dimension::Cells(0.5),
+                            width: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
+                            height: Dimension::Cells(QUIET_TAB_CORNER_CELLS),
                             poly: TOP_RIGHT_ROUNDED_CORNER,
                         },
                         bottom_left: SizedPoly {
@@ -287,14 +305,8 @@ impl crate::TermWindow {
                         let bg = bg_color
                             .unwrap_or_else(|| inactive_tab.bg_color.into())
                             .to_linear();
-                        let edge = colors.inactive_tab_edge().to_linear();
                         ElementColors {
-                            border: BorderColor {
-                                left: bg,
-                                right: edge,
-                                top: bg,
-                                bottom: bg,
-                            },
+                            border: BorderColor::default(),
                             bg: bg.into(),
                             text: fg_color
                                 .unwrap_or_else(|| inactive_tab.fg_color.into())
@@ -305,11 +317,7 @@ impl crate::TermWindow {
                     .hover_colors({
                         let inactive_tab_hover = colors.inactive_tab_hover();
                         Some(ElementColors {
-                            border: BorderColor::new(
-                                bg_color
-                                    .unwrap_or_else(|| inactive_tab_hover.bg_color.into())
-                                    .to_linear(),
-                            ),
+                            border: BorderColor::default(),
                             bg: bg_color
                                 .unwrap_or_else(|| inactive_tab_hover.bg_color.into())
                                 .to_linear()
@@ -542,6 +550,28 @@ impl crate::TermWindow {
         self.render_element(&computed, gl_state, None)?;
 
         Ok(ui_items)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fancy_tabbar_quiet_chrome_metrics_reduce_tab_density_from_phase_six_values() {
+        assert!(QUIET_BAR_LINE_HEIGHT < 1.75);
+        assert!(QUIET_TAB_LINE_HEIGHT < 1.75);
+        assert!(QUIET_TAB_TOP_MARGIN_CELLS < 0.2);
+        assert!(QUIET_TAB_TOP_PADDING_CELLS < 0.2);
+        assert!(QUIET_TAB_HORIZONTAL_PADDING_EXTRA_PX < 4.0);
+    }
+
+    #[test]
+    fn fancy_tabbar_operator_marker_chip_is_flatter_than_the_old_capsule_style() {
+        assert!(QUIET_OPERATOR_MARKER_MARGIN_LEFT_CELLS < 0.18);
+        assert!(QUIET_OPERATOR_MARKER_PADDING_X_CELLS < 0.45);
+        assert!(QUIET_OPERATOR_MARKER_PADDING_TOP_CELLS < 0.15);
+        assert!(QUIET_TAB_CORNER_CELLS < 0.5);
     }
 }
 

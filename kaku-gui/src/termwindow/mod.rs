@@ -125,6 +125,62 @@ impl TaskCenterScope {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperatorNavItem {
+    Home,
+    Inbox,
+    Running,
+    Failed,
+    Metadata,
+    Tasks,
+}
+
+impl OperatorNavItem {
+    pub fn ordered() -> [OperatorNavItem; 6] {
+        [
+            OperatorNavItem::Home,
+            OperatorNavItem::Inbox,
+            OperatorNavItem::Running,
+            OperatorNavItem::Failed,
+            OperatorNavItem::Metadata,
+            OperatorNavItem::Tasks,
+        ]
+    }
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            OperatorNavItem::Home => "◈",
+            OperatorNavItem::Inbox => "●",
+            OperatorNavItem::Running => "◌",
+            OperatorNavItem::Failed => "✕",
+            OperatorNavItem::Metadata => "◇",
+            OperatorNavItem::Tasks => "◦",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            OperatorNavItem::Home => "Home",
+            OperatorNavItem::Inbox => "Inbox",
+            OperatorNavItem::Running => "Run",
+            OperatorNavItem::Failed => "Fail",
+            OperatorNavItem::Metadata => "Meta",
+            OperatorNavItem::Tasks => "Tasks",
+        }
+    }
+
+    pub fn query(self) -> Option<&'static str> {
+        match self {
+            OperatorNavItem::Home => None,
+            OperatorNavItem::Inbox => Some("unread"),
+            OperatorNavItem::Running => Some("running"),
+            OperatorNavItem::Failed => Some("failed"),
+            OperatorNavItem::Metadata => Some("status progress"),
+            OperatorNavItem::Tasks => Some("task-pane"),
+        }
+    }
+}
+
 impl InputBroadcastMode {
     fn applies_to_active_tab(
         self,
@@ -185,6 +241,8 @@ const VSCODE_OPEN_CANDIDATES: &[&str] = &[
 ];
 
 const TOP_TAB_LAYOUT_FULLSCREEN_STICKY_MS: u64 = 160;
+const OPERATOR_NAV_WIDTH_PX: usize = 92;
+const OPERATOR_NAV_MIN_WINDOW_WIDTH: usize = 720;
 
 #[derive(Clone, Debug)]
 struct FileLinkTarget {
@@ -561,6 +619,7 @@ pub enum TermWindowNotif {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UIItemType {
     TabBar(TabBarItem),
+    OperatorNav(OperatorNavItem),
     CloseTab(usize),
     AboveScrollThumb,
     ScrollThumb,
@@ -845,6 +904,7 @@ pub struct TermWindow {
     show_scroll_bar: bool,
     tab_bar: TabBarState,
     fancy_tab_bar: Option<box_model::ComputedElement>,
+    operator_nav_selection: OperatorNavItem,
     pub right_status: String,
     pub left_status: String,
     workspace_status_cache: HashMap<String, String>,
@@ -1303,7 +1363,12 @@ impl TermWindow {
             pixel_max: terminal_size.pixel_width as f32,
             pixel_cell: render_metrics.cell_size.width as f32,
         };
-        let padding_left = config.window_padding.left.evaluate_as_pixels(h_context) as usize;
+        let padding_left = config.window_padding.left.evaluate_as_pixels(h_context) as usize
+            + if terminal_size.pixel_width >= OPERATOR_NAV_MIN_WINDOW_WIDTH {
+                OPERATOR_NAV_WIDTH_PX
+            } else {
+                0
+            };
         let padding_right = resize::effective_right_padding(&config, h_context) as usize;
         let v_context = DimensionContext {
             dpi: dpi as f32,
@@ -1404,6 +1469,7 @@ impl TermWindow {
             show_scroll_bar: config.enable_scroll_bar,
             tab_bar: TabBarState::default(),
             fancy_tab_bar: None,
+            operator_nav_selection: OperatorNavItem::Home,
             right_status: String::new(),
             left_status: String::new(),
             workspace_status_cache: HashMap::new(),
@@ -2558,6 +2624,18 @@ impl TermWindow {
 }
 
 impl TermWindow {
+    pub(crate) fn operator_nav_enabled(&self) -> bool {
+        self.dimensions.pixel_width >= OPERATOR_NAV_MIN_WINDOW_WIDTH
+    }
+
+    pub(crate) fn operator_nav_width_px(&self) -> usize {
+        if self.operator_nav_enabled() {
+            OPERATOR_NAV_WIDTH_PX
+        } else {
+            0
+        }
+    }
+
     /// Computes effective vertical padding for the current window state.
     pub fn effective_vertical_padding(&self) -> (usize, usize) {
         let tab_bar_height = if self.show_tab_bar {
@@ -3062,6 +3140,14 @@ impl TermWindow {
         Mux::get()
             .get_window(self.mux_window_id)
             .map(|window| window.get_workspace().to_string())
+    }
+
+    pub(crate) fn activate_operator_nav(&mut self, item: OperatorNavItem) {
+        self.operator_nav_selection = item;
+        match item.query() {
+            Some(query) => self.show_task_center_with_scope(TaskCenterScope::with_query(query)),
+            None => self.show_task_center(),
+        }
     }
 
     fn workspace_status_cache_from_records(
