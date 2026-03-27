@@ -885,6 +885,30 @@ impl SessionHandler {
                 })
                 .detach();
             }
+            Pdu::ListWorkspaceProgress(ListWorkspaceProgress { workspace }) => {
+                spawn_into_main_thread(async move {
+                    catch(
+                        move || {
+                            let progress = Mux::get()
+                                .list_workspace_progress()
+                                .into_iter()
+                                .filter(|record| {
+                                    workspace
+                                        .as_ref()
+                                        .map(|name| &record.workspace == name)
+                                        .unwrap_or(true)
+                                })
+                                .map(workspace_progress_to_state)
+                                .collect();
+                            Ok(Pdu::ListWorkspaceProgressResponse(
+                                ListWorkspaceProgressResponse { progress },
+                            ))
+                        },
+                        send_response,
+                    )
+                })
+                .detach();
+            }
             Pdu::AppendWorkspaceLog(AppendWorkspaceLog { workspace, message }) => {
                 spawn_into_main_thread(async move {
                     catch(
@@ -1703,6 +1727,7 @@ impl SessionHandler {
             | Pdu::ListWorkspaceStatusResponse { .. }
             | Pdu::SetWorkspaceProgressResponse { .. }
             | Pdu::ClearWorkspaceProgressResponse { .. }
+            | Pdu::ListWorkspaceProgressResponse { .. }
             | Pdu::AppendWorkspaceLogResponse { .. }
             | Pdu::ClearWorkspaceLogResponse { .. }
             | Pdu::ListWorkspaceLogResponse { .. }

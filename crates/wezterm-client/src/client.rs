@@ -1451,6 +1451,11 @@ impl Client {
         ClearWorkspaceProgressResponse
     );
     rpc!(
+        list_workspace_progress,
+        ListWorkspaceProgress,
+        ListWorkspaceProgressResponse
+    );
+    rpc!(
         append_workspace_log,
         AppendWorkspaceLog,
         AppendWorkspaceLogResponse

@@ -550,6 +550,8 @@ pdu! {
     PipePane: 104,
     PipePaneResponse: 105,
     TaskPaneChanged: 106,
+    ListWorkspaceProgress: 107,
+    ListWorkspaceProgressResponse: 108,
 }
 
 impl Pdu {
@@ -1091,6 +1093,16 @@ pub struct ClearWorkspaceProgress {
 pub struct ClearWorkspaceProgressResponse {
     pub cleared_count: usize,
     pub workspaces: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceProgress {
+    pub workspace: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
+pub struct ListWorkspaceProgressResponse {
+    pub progress: Vec<WorkspaceProgressState>,
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Debug, Clone)]
