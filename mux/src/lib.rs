@@ -2619,7 +2619,7 @@ mod tests {
     }
 
     #[test]
-    fn record_task_pane_exit_keeps_failed_records_queryable_until_explicit_cleanup() {
+    fn task_panes_record_task_pane_exit_keeps_failed_records_queryable_until_explicit_cleanup() {
         let mux = Mux::new(None);
         let pane_id = PaneId::new(42);
         let mut rerun = HashMap::new();
