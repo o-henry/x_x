@@ -40,11 +40,11 @@
 
 ### Compatibility and Hardening
 
-- [ ] **COMP-01**: Developer can continue using existing Kaku CLI pane-management commands without behavior regressions.
+- [x] **COMP-01**: Developer can continue using existing Kaku CLI pane-management commands without behavior regressions.
 - [x] **COMP-02**: Developer can continue using existing pane/tab creation, splitting, navigation, focus, and workspace switching without behavior regressions.
 - [x] **COMP-03**: Developer can rely on stable machine-readable contracts for each new CLI surface added by this control plane.
 - [x] **COMP-04**: Developer can verify each phase with targeted tests or checks before the phase is considered done.
-- [ ] **COMP-05**: Developer can use the fork without it feeling like a different app shell or a cmux clone.
+- [x] **COMP-05**: Developer can use the fork without it feeling like a different app shell or a cmux clone.
 
 ## v2 Requirements
 
@@ -91,11 +91,11 @@
 | LIFE-03 | Phase 4 | Pending |
 | LIFE-04 | Phase 4 | Pending |
 | LIFE-05 | Phase 4 | Pending |
-| COMP-01 | Phase 5 | Pending |
+| COMP-01 | Phase 5 | Complete |
 | COMP-02 | Phase 5 | Complete |
 | COMP-03 | Phase 5 | Complete |
 | COMP-04 | Phase 5 | Complete |
-| COMP-05 | Phase 5 | Pending |
+| COMP-05 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total
