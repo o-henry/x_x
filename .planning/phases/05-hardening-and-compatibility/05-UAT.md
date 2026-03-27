@@ -5,8 +5,9 @@ source:
   - 05-hardening-and-compatibility-01-SUMMARY.md
   - 05-hardening-and-compatibility-02-SUMMARY.md
   - 05-hardening-and-compatibility-03-SUMMARY.md
+  - 05-hardening-and-compatibility-05-SUMMARY.md
 started: 2026-03-27T11:16:06Z
-updated: 2026-03-27T11:18:30Z
+updated: 2026-03-27T11:54:49Z
 runtime:
   gui: ./target/debug/kaku-gui start --always-new-process
   cli: ./target/debug/kaku cli
@@ -91,30 +92,43 @@ Observed:
 ### Rerun and respawn follow-through
 
 ```bash
-./target/debug/kaku cli rerun-pane --pane-id 2
-./target/debug/kaku cli respawn-pane --pane-id 2
-./target/debug/kaku cli list-task-panes --format json
+cargo build --locked -p kaku -p kaku-gui -p wezterm-mux-server-impl
+./target/debug/kaku-gui start --always-new-process
+ls -la ~/.local/share/kaku/default-fun.tw93.kaku ~/.local/share/kaku/gui-sock-2572
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux list --format json
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux spawn --cwd "$PWD" -- /bin/sh -lc 'echo PHASE5_RESPAWN_FIXTURE; false'
+sleep 2
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux list-task-panes --pane-id 2 --format json
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux rerun-pane --pane-id 2
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux respawn-pane --pane-id 2
+WEZTERM_UNIX_SOCKET=$HOME/.local/share/kaku/gui-sock-2572 ./target/debug/kaku cli --no-auto-start --prefer-mux list-task-panes --format json
 ```
 
 Observed:
 
+- Fresh rebuilt binaries were used for the rerun because the previously published default GUI socket was stale. The new `start --always-new-process` session published `~/.local/share/kaku/default-fun.tw93.kaku -> ~/.local/share/kaku/gui-sock-2572`, and the live CLI verification used that exact socket via `WEZTERM_UNIX_SOCKET`.
+- The retained failing fixture on pane `2` stayed visible as `is_dead: true`, `is_failed: true`, and `rerun_available: true`, confirming the rerun/respawn metadata path was available in the fresh session.
 - `rerun-pane --pane-id 2` succeeded and returned:
 
 ```json
 {
   "pane_id": 2,
-  "spawned_pane_id": 5,
+  "spawned_pane_id": 3,
   "status": "rerun"
 }
 ```
 
-- `respawn-pane --pane-id 2` did not complete successfully. The CLI terminated with:
+- `respawn-pane --pane-id 2` also completed successfully and returned:
 
-```text
-unexpected respawn-pane status `respawned`; terminating
+```json
+{
+  "pane_id": 2,
+  "spawned_pane_id": 4,
+  "status": "respawn"
+}
 ```
 
-- A later `list-task-panes --format json` showed dead records for panes `5` and `6`, indicating the underlying runtime attempted to create panes even though the machine-readable respawn contract was not satisfied end-to-end.
+- No runtime/server code change was required after the fresh rebuild. The stale mismatch from the earlier Wave 4 artifact did not reproduce once the CLI was pointed at the newly published live GUI socket.
 
 ## Tests
 
@@ -137,9 +151,7 @@ notes: "The tee file contains raw terminal traffic and shell echo, so duplicatio
 
 ### 5. Rerun and respawn are both proven end-to-end from retained task-pane records
 expected: both `rerun-pane` and `respawn-pane` return the documented machine-readable contract in the live runtime.
-result: issue
-severity: medium
-reported: "`respawn-pane --pane-id 2` failed because the CLI received unexpected status `respawned` instead of the documented `respawn`"
+result: pass
 
 ### 6. Task Center remains an additive consumer overlay in the live app shell
 expected: the app still presents as a normal Kaku window and Task Center remains an additive overlay rather than a new dashboard shell.
@@ -149,22 +161,9 @@ notes: "The live session remained a standard Kaku window and targeted `cargo tes
 ## Summary
 
 total: 6
-passed: 4
-issues: 1
+passed: 5
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
 partial: 1
-
-## Gaps
-
-- truth: "both `rerun-pane` and `respawn-pane` return the documented machine-readable contract in the live runtime"
-  status: failed
-  reason: "The CLI still receives runtime status `respawned` during the respawn path, which does not match the documented `respawn` contract."
-  severity: medium
-  test: 5
-  root_cause: "Server/runtime status wording is still divergent from the CLI contract validated in automated tests."
-  artifacts:
-    - "/tmp/phase5-task-pane.log"
-  missing:
-    - "A live runtime pass where `respawn-pane` returns `{ status: \"respawn\" }`"

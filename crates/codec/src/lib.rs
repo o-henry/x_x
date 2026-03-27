@@ -2208,7 +2208,7 @@ mod test {
         let respawn = RespawnPaneResponse {
             pane_id: PaneId::new(9),
             spawned_pane_id: PaneId::new(13),
-            status: "respawned".to_string(),
+            status: "respawn".to_string(),
         };
         let silence = SilenceWatchdogResponse {
             pane_id: PaneId::new(9),
