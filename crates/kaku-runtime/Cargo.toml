@@ -1,0 +1,15 @@
+[package]
+name = "kaku-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+config.workspace = true
+libc.workspace = true
+log.workspace = true
+mux.workspace = true
+wezterm-blob-leases = { workspace = true, features = ["simple_tempdir"] }
+wezterm-client.workspace = true
+wezterm-mux-server-impl.workspace = true

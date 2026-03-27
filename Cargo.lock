@@ -2881,6 +2881,7 @@ dependencies = [
  "http_req",
  "image",
  "k9",
+ "kaku-runtime",
  "lazy_static",
  "lfucache",
  "libc",
@@ -2942,6 +2943,20 @@ dependencies = [
  "log",
  "mux",
  "wezterm-client",
+]
+
+[[package]]
+name = "kaku-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "config",
+ "libc",
+ "log",
+ "mux",
+ "wezterm-blob-leases",
+ "wezterm-client",
+ "wezterm-mux-server-impl",
 ]
 
 [[package]]

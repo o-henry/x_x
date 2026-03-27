@@ -56,6 +56,7 @@ hdrhistogram.workspace = true
 http_req.workspace = true
 image.workspace = true
 lazy_static.workspace = true
+kaku-runtime.workspace = true
 lfucache.workspace = true
 libc.workspace = true
 log.workspace = true
