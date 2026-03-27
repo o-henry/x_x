@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05-hardening-and-compatibility-02-PLAN.md
-last_updated: "2026-03-27T11:12:14.232Z"
+status: verifying
+stopped_at: Completed 05-hardening-and-compatibility-04-PLAN.md
+last_updated: "2026-03-27T11:24:24.364Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 24
-  completed_plans: 23
-  percent: 92
+  completed_plans: 24
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 
 Phase: 05 (hardening-and-compatibility) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-03-27
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [█████████░] 92%
 | Phase 02-workspace-metadata-plane P03 | 25 min | 2 tasks | 9 files |
 | Phase 05-hardening-and-compatibility P01 | 5min | 2 tasks | 2 files |
 | Phase 05-hardening-and-compatibility P02 | 15min | 2 tasks | 12 files |
+| Phase 05-hardening-and-compatibility P04 | 510 | 1 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Dead task-pane records are retained only for explicit lifecycle reasons: remain-on-exit, failure, or rerun metadata.
 - [Phase 05]: Remote lifecycle consumers resync on a typed TaskPaneChanged transport event instead of inferring refresh timing.
 - [Phase 05]: The stable respawn status string is respawn, and the CLI rejects unexpected rerun and respawn status values.
+- [Phase 05-hardening-and-compatibility]: Recorded Phase 5 as closed with a truthful limitation set instead of claiming full respawn compatibility after the live runtime mismatch.
+- [Phase 05-hardening-and-compatibility]: Used the real kaku-gui runtime and exact kaku cli commands as the source of truth for the Wave 4 UAT artifact.
 
 ### Pending Todos
 
@@ -84,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T10:59:31.126Z
-Stopped at: Completed 05-hardening-and-compatibility-02-PLAN.md
+Last session: 2026-03-27T11:24:24.359Z
+Stopped at: Completed 05-hardening-and-compatibility-04-PLAN.md
 Resume file: None

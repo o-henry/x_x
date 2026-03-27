@@ -14,7 +14,7 @@ This roadmap turns the existing local Kaku fork into a Rust-only control plane f
 - [ ] **Phase 2: Workspace Metadata Plane** - Add workspace-scoped status, progress, and log storage with existing-surface UI exposure.
 - [ ] **Phase 3: Task Center Overlay** - Add a searchable overlay for unread, failed, running, and focusable work.
 - [ ] **Phase 4: Task-Pane Lifecycle** - Add remain-on-exit, rerun/respawn, watchdog silence, and pipe-pane behavior.
-- [ ] **Phase 5: Hardening and Compatibility** - Lock down command contracts, tests, docs, and regression safety.
+- [x] **Phase 5: Hardening and Compatibility** - Lock down command contracts, tests, docs, and regression safety.
 
 ## Phase Details
 
@@ -97,4 +97,4 @@ Plans:
 | 2. Workspace Metadata Plane | 0/5 | Not started | - |
 | 3. Task Center Overlay | 0/TBD | Not started | - |
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
-| 5. Hardening and Compatibility | 2/4 | In Progress | - |
+| 5. Hardening and Compatibility | 4/4 | Complete | 2026-03-27 |
