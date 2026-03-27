@@ -15,7 +15,7 @@ This roadmap turns the existing local Kaku fork into a Rust-only control plane f
 - [ ] **Phase 3: Task Center Overlay** - Add a searchable overlay for unread, failed, running, and focusable work.
 - [ ] **Phase 4: Task-Pane Lifecycle** - Add remain-on-exit, rerun/respawn, watchdog silence, and pipe-pane behavior.
 - [x] **Phase 5: Hardening and Compatibility** - Lock down command contracts, tests, docs, and regression safety.
-- [ ] **Phase 6: Operator UI Surfaces** - Make the control plane operable from native Kaku UI with mouse/keyboard-first flows instead of CLI recall.
+- [x] **Phase 6: Operator UI Surfaces** - Task Center, compact tabbar discoverability, and prompt/confirm metadata editing now make the control plane operable from native Kaku UI without a dashboard rewrite.
 
 ## Phase Details
 
@@ -102,9 +102,9 @@ Plans:
 **Plans**: 4 plans
 Plans:
 - [x] 06-01-PLAN.md — Add the Phase 06 controller seam: scoped Task Center bootstrap plus typed workspace metadata read/write helpers in TermWindow and the client-domain transport.
-- [ ] 06-02-PLAN.md — Upgrade Task Center into the primary operator surface with visible inline actions and keyboard+mouse parity.
+- [x] 06-02-PLAN.md — Upgrade Task Center into the primary operator surface with visible inline actions and keyboard+mouse parity.
 - [x] 06-03-PLAN.md — Add compact tabbar operator affordances and click-through discovery into scoped Task Center views.
-- [ ] 06-04-PLAN.md — Close Phase 06 with targeted verification, changed-files/limitations/UAT artifacts, and shipped-shape spec updates.
+- [x] 06-04-PLAN.md — Close Phase 06 with targeted verification, changed-files/limitations/UAT artifacts, and shipped-shape spec updates.
 **UI hint**: yes
 
 ## Progress
@@ -116,4 +116,4 @@ Plans:
 | 3. Task Center Overlay | 0/TBD | Not started | - |
 | 4. Task-Pane Lifecycle | 0/TBD | Not started | - |
 | 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
-| 6. Operator UI Surfaces | 2/4 | In Progress | - |
+| 6. Operator UI Surfaces | 4/4 | Complete | 2026-03-27 |
