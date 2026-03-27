@@ -102,6 +102,7 @@ pub mod tab;
 pub mod termwiztermtab;
 pub mod tmux;
 pub mod tmux_commands;
+pub mod workspace_state;
 mod tmux_pty;
 pub mod window;
 
@@ -981,11 +982,9 @@ impl Mux {
 
     pub fn notify(&self, notification: MuxNotification) {
         let notifications_changed = match &notification {
-            MuxNotification::PaneFocused(pane_id) => self
-                .notification_store
-                .write()
-                .apply_pane_focused(*pane_id)
-                > 0,
+            MuxNotification::PaneFocused(pane_id) => {
+                self.notification_store.write().apply_pane_focused(*pane_id) > 0
+            }
             _ => false,
         };
 
@@ -1480,6 +1479,10 @@ impl Mux {
     }
 
     pub fn notification_unread_count_for_tab(&self, tab_id: TabId) -> usize {
+        let workspace = self
+            .window_containing_tab(tab_id)
+            .and_then(|window_id| self.get_window(window_id).map(|window| window.get_workspace().to_string()))
+            .unwrap_or_else(|| self.active_workspace());
         let pane_ids = self
             .get_tab(tab_id)
             .map(|tab| {
@@ -1491,7 +1494,7 @@ impl Mux {
             .unwrap_or_default();
         self.notification_store
             .read()
-            .unread_count_for_tab(tab_id, &pane_ids)
+            .unread_count_for_tab(tab_id, &workspace, &pane_ids)
     }
 
     pub fn notification_unread_count_for_workspace(&self, workspace: &str) -> usize {
@@ -1544,7 +1547,29 @@ impl Mux {
             }
         }
 
-        None
+        // Allow workspace-scoped notifications to be created even before the
+        // target workspace has a live pane by falling back to the currently
+        // focused pane for the active identity, then the active workspace,
+        // then any live pane in the mux.
+        if let Some(pane_id) = self
+            .active_identity()
+            .as_ref()
+            .and_then(|client_id| self.resolve_focused_pane(client_id))
+            .map(|(_, _, _, pane_id)| pane_id)
+        {
+            return Some(pane_id);
+        }
+
+        let active_workspace = self.active_workspace();
+        for window_id in self.iter_windows_in_workspace(&active_workspace) {
+            if let Some(pane_id) = self.first_pane_for_window(window_id) {
+                return Some(pane_id);
+            }
+        }
+
+        self.iter_windows()
+            .into_iter()
+            .find_map(|window_id| self.first_pane_for_window(window_id))
     }
 
     fn first_pane_for_window(&self, window_id: WindowId) -> Option<PaneId> {
