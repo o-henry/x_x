@@ -72,6 +72,20 @@ fn should_preserve_tmux_bypass_reporting(
         && modifiers.contains(bypass_modifiers)
 }
 
+fn operator_marker_workspace_scope(item: TabBarItem, workspace: Option<&str>) -> Option<String> {
+    match item {
+        TabBarItem::OperatorMarker { .. } => workspace.map(ToString::to_string),
+        _ => None,
+    }
+}
+
+fn operator_marker_cursor(item: TabBarItem) -> MouseCursor {
+    match item {
+        TabBarItem::OperatorMarker { .. } => MouseCursor::Hand,
+        _ => MouseCursor::Arrow,
+    }
+}
+
 impl super::TermWindow {
     const TAB_DRAG_THRESHOLD: isize = 6;
 
@@ -828,6 +842,7 @@ impl super::TermWindow {
         event: MouseEvent,
         context: &dyn WindowOps,
     ) {
+        let cursor = operator_marker_cursor(item);
         match event.kind {
             WMEK::Press(MousePress::Left) => match item {
                 TabBarItem::Tab { tab_idx, active } => {
@@ -850,8 +865,25 @@ impl super::TermWindow {
                     self.tab_drag_state = None;
                     self.do_new_tab_button_click(MousePress::Left);
                 }
-                TabBarItem::OperatorMarker { .. } => {
+                TabBarItem::OperatorMarker { tab_idx, active } => {
                     self.tab_drag_state = None;
+                    if !active {
+                        if let Err(err) = self.activate_tab(tab_idx as isize) {
+                            log::debug!(
+                                "activate_tab({tab_idx}) failed before operator marker handoff: {err:#}"
+                            );
+                        }
+                    }
+                    let workspace = Mux::get()
+                        .get_window(self.mux_window_id)
+                        .map(|window| window.get_workspace().to_string());
+                    if let Some(workspace) =
+                        operator_marker_workspace_scope(item, workspace.as_deref())
+                    {
+                        self.show_task_center_for_workspace(&workspace);
+                    } else {
+                        self.show_task_center();
+                    }
                 }
                 TabBarItem::None | TabBarItem::LeftStatus | TabBarItem::RightStatus => {
                     self.tab_drag_state = None;
@@ -956,7 +988,7 @@ impl super::TermWindow {
             }
             _ => {}
         }
-        context.set_cursor(Some(MouseCursor::Arrow));
+        context.set_cursor(Some(cursor));
     }
 
     pub fn mouse_event_above_scroll_thumb(
