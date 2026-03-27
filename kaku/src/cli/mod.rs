@@ -8,9 +8,10 @@ mod activate_pane_direction;
 mod activate_tab;
 mod adjust_pane_size;
 mod capabilities;
+mod clear_log;
+mod clear_notifications;
 mod clear_progress;
 mod clear_status;
-mod clear_notifications;
 mod get_pane_direction;
 mod get_text;
 mod identify;
@@ -19,8 +20,10 @@ mod jump_prev_unread;
 mod kill_pane;
 mod list;
 mod list_clients;
+mod list_log;
 mod list_notifications;
 mod list_status;
+mod log;
 mod mark_read;
 mod mark_unread;
 mod move_pane_to_new_tab;
@@ -172,6 +175,27 @@ enum CliSubCommand {
     ClearProgress(clear_progress::ClearWorkspaceProgressCommand),
 
     #[command(
+        name = "log",
+        rename_all = "kebab",
+        about = "append a workspace log entry"
+    )]
+    Log(log::WorkspaceLogCommand),
+
+    #[command(
+        name = "clear-log",
+        rename_all = "kebab",
+        about = "clear workspace log entries"
+    )]
+    ClearLog(clear_log::ClearWorkspaceLogCommand),
+
+    #[command(
+        name = "list-log",
+        rename_all = "kebab",
+        about = "list workspace log entries"
+    )]
+    ListLog(list_log::ListWorkspaceLogCommand),
+
+    #[command(
         name = "mark-read",
         rename_all = "kebab",
         about = "mark notifications as read"
@@ -298,6 +322,9 @@ async fn run_cli_async(opts: &crate::Opt, cli: CliCommand) -> anyhow::Result<()>
         CliSubCommand::ListStatus(cmd) => cmd.run(client).await,
         CliSubCommand::SetProgress(cmd) => cmd.run(client).await,
         CliSubCommand::ClearProgress(cmd) => cmd.run(client).await,
+        CliSubCommand::Log(cmd) => cmd.run(client).await,
+        CliSubCommand::ClearLog(cmd) => cmd.run(client).await,
+        CliSubCommand::ListLog(cmd) => cmd.run(client).await,
         CliSubCommand::MarkRead(cmd) => cmd.run(client).await,
         CliSubCommand::MarkUnread(cmd) => cmd.run(client).await,
         CliSubCommand::MovePaneToNewTab(cmd) => cmd.run(client).await,
