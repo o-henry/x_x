@@ -30,7 +30,10 @@ use crate::termwindow::webgpu::WebGpuState;
 use ::wezterm_term::input::{ClickPosition, MouseButton as TMB};
 use ::window::*;
 use anyhow::{anyhow, ensure, Context};
-use codec::{ListWorkspaceStatus, WorkspaceStatusState};
+use codec::{
+    ClearWorkspaceProgress, ClearWorkspaceStatus, ListWorkspaceProgress, ListWorkspaceStatus,
+    SetWorkspaceProgress, SetWorkspaceStatus, WorkspaceProgressState, WorkspaceStatusState,
+};
 use config::keyassignment::{
     Confirmation, KeyAssignment, LauncherActionArgs, PaneDirection, PaneEncoding, Pattern,
     PromptInputLine, QuickSelectArguments, RotationDirection, SpawnCommand, SplitSize,
@@ -98,6 +101,28 @@ enum InputBroadcastMode {
     Off,
     CurrentTab,
     AllTabs,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct TaskCenterScope {
+    workspace: Option<String>,
+    query: Option<String>,
+}
+
+impl TaskCenterScope {
+    fn for_workspace(workspace: impl Into<String>) -> Self {
+        Self {
+            workspace: Some(workspace.into()),
+            query: None,
+        }
+    }
+
+    fn with_query(query: impl Into<String>) -> Self {
+        Self {
+            workspace: None,
+            query: Some(query.into()),
+        }
+    }
 }
 
 impl InputBroadcastMode {
@@ -3033,6 +3058,74 @@ impl TermWindow {
         Some(pane.domain_id())
     }
 
+    fn current_workspace_name(&self) -> Option<String> {
+        Mux::get()
+            .get_window(self.mux_window_id)
+            .map(|window| window.get_workspace().to_string())
+    }
+
+    fn workspace_status_cache_from_records(
+        statuses: Vec<WorkspaceStatusState>,
+    ) -> HashMap<String, String> {
+        statuses
+            .into_iter()
+            .map(|record| (record.workspace, record.status))
+            .collect()
+    }
+
+    fn workspace_progress_cache_from_records(
+        progress: Vec<WorkspaceProgressState>,
+    ) -> HashMap<String, u8> {
+        progress
+            .into_iter()
+            .map(|record| (record.workspace, record.value))
+            .collect()
+    }
+
+    fn task_center_entry_matches_query(entry: &TaskCenterEntry, query: &str) -> bool {
+        let query = query.trim();
+        if query.is_empty() {
+            return true;
+        }
+
+        let search = [
+            entry.label.as_str(),
+            entry.workspace.as_str(),
+            entry.source_label.as_deref().unwrap_or(""),
+            entry.kind_label.as_deref().unwrap_or(""),
+            entry.workspace_status.as_deref().unwrap_or(""),
+        ]
+        .join(" ")
+        .to_ascii_lowercase();
+
+        query
+            .split_whitespace()
+            .all(|token| search.contains(&token.to_ascii_lowercase()))
+    }
+
+    fn scoped_task_center_entries_for(
+        entries: Vec<TaskCenterEntry>,
+        scope: &TaskCenterScope,
+    ) -> Vec<TaskCenterEntry> {
+        entries
+            .into_iter()
+            .filter(|entry| {
+                scope
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| &entry.workspace == workspace)
+                    .unwrap_or(true)
+            })
+            .filter(|entry| {
+                scope
+                    .query
+                    .as_ref()
+                    .map(|query| Self::task_center_entry_matches_query(entry, query))
+                    .unwrap_or(true)
+            })
+            .collect()
+    }
+
     pub(crate) fn task_center_entries(&mut self) -> Vec<TaskCenterEntry> {
         if self.task_center_cache.is_empty() {
             self.refresh_task_center_cache();
@@ -3245,19 +3338,224 @@ impl TermWindow {
                 }
             };
 
+            let progress = match inner
+                .client
+                .list_workspace_progress(ListWorkspaceProgress { workspace: None })
+                .await
+            {
+                Ok(response) => response.progress,
+                Err(err) => {
+                    log::debug!("refresh_workspace_metadata_cache progress query failed: {err:#}");
+                    return;
+                }
+            };
+
             window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
-                term_window.apply_workspace_metadata_cache(statuses);
+                term_window.apply_workspace_metadata_cache(statuses, progress);
             })));
         })
         .detach();
     }
 
-    fn apply_workspace_metadata_cache(&mut self, statuses: Vec<WorkspaceStatusState>) {
-        self.workspace_status_cache = statuses
-            .into_iter()
-            .map(|record| (record.workspace, record.status))
-            .collect();
+    fn apply_workspace_metadata_cache(
+        &mut self,
+        statuses: Vec<WorkspaceStatusState>,
+        progress: Vec<WorkspaceProgressState>,
+    ) {
+        self.workspace_status_cache = Self::workspace_status_cache_from_records(statuses);
+        self.workspace_progress_cache = Self::workspace_progress_cache_from_records(progress);
         self.update_title_impl();
+    }
+
+    pub(crate) fn set_current_workspace_status(&self, status: impl Into<String>) -> bool {
+        let Some(workspace) = self.current_workspace_name() else {
+            return false;
+        };
+        self.set_workspace_status_via_client(workspace, status.into())
+    }
+
+    pub(crate) fn clear_current_workspace_status(&self) -> bool {
+        let Some(workspace) = self.current_workspace_name() else {
+            return false;
+        };
+        self.clear_workspace_status_via_client(Some(workspace))
+    }
+
+    pub(crate) fn set_current_workspace_progress(&self, value: u8) -> bool {
+        let Some(workspace) = self.current_workspace_name() else {
+            return false;
+        };
+        self.set_workspace_progress_via_client(workspace, value)
+    }
+
+    pub(crate) fn clear_current_workspace_progress(&self) -> bool {
+        let Some(workspace) = self.current_workspace_name() else {
+            return false;
+        };
+        self.clear_workspace_progress_via_client(Some(workspace))
+    }
+
+    pub(crate) fn set_workspace_status_via_client(
+        &self,
+        workspace: String,
+        status: String,
+    ) -> bool {
+        let Some(window) = self.window.clone() else {
+            return false;
+        };
+        let Some(domain_id) = self.active_client_domain_id() else {
+            return false;
+        };
+
+        promise::spawn::spawn(async move {
+            let inner = match ClientDomain::get_client_inner_for_domain(domain_id) {
+                Ok(inner) => inner,
+                Err(err) => {
+                    log::debug!("set_workspace_status_via_client client lookup failed: {err:#}");
+                    return;
+                }
+            };
+
+            if let Err(err) = inner
+                .client
+                .set_workspace_status(SetWorkspaceStatus { workspace, status })
+                .await
+            {
+                log::debug!("set_workspace_status_via_client request failed: {err:#}");
+                return;
+            }
+
+            window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                term_window.refresh_workspace_metadata_cache();
+            })));
+        })
+        .detach();
+        true
+    }
+
+    pub(crate) fn clear_workspace_status_via_client(&self, workspace: Option<String>) -> bool {
+        let Some(window) = self.window.clone() else {
+            return false;
+        };
+        let Some(domain_id) = self.active_client_domain_id() else {
+            return false;
+        };
+
+        promise::spawn::spawn(async move {
+            let inner = match ClientDomain::get_client_inner_for_domain(domain_id) {
+                Ok(inner) => inner,
+                Err(err) => {
+                    log::debug!("clear_workspace_status_via_client client lookup failed: {err:#}");
+                    return;
+                }
+            };
+
+            if let Err(err) = inner
+                .client
+                .clear_workspace_status(ClearWorkspaceStatus { workspace })
+                .await
+            {
+                log::debug!("clear_workspace_status_via_client request failed: {err:#}");
+                return;
+            }
+
+            window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                term_window.refresh_workspace_metadata_cache();
+            })));
+        })
+        .detach();
+        true
+    }
+
+    pub(crate) fn set_workspace_progress_via_client(&self, workspace: String, value: u8) -> bool {
+        let Some(window) = self.window.clone() else {
+            return false;
+        };
+        let Some(domain_id) = self.active_client_domain_id() else {
+            return false;
+        };
+
+        promise::spawn::spawn(async move {
+            let inner = match ClientDomain::get_client_inner_for_domain(domain_id) {
+                Ok(inner) => inner,
+                Err(err) => {
+                    log::debug!("set_workspace_progress_via_client client lookup failed: {err:#}");
+                    return;
+                }
+            };
+
+            if let Err(err) = inner
+                .client
+                .set_workspace_progress(SetWorkspaceProgress { workspace, value })
+                .await
+            {
+                log::debug!("set_workspace_progress_via_client request failed: {err:#}");
+                return;
+            }
+
+            window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                term_window.refresh_workspace_metadata_cache();
+            })));
+        })
+        .detach();
+        true
+    }
+
+    pub(crate) fn clear_workspace_progress_via_client(&self, workspace: Option<String>) -> bool {
+        let Some(window) = self.window.clone() else {
+            return false;
+        };
+        let Some(domain_id) = self.active_client_domain_id() else {
+            return false;
+        };
+
+        promise::spawn::spawn(async move {
+            let inner = match ClientDomain::get_client_inner_for_domain(domain_id) {
+                Ok(inner) => inner,
+                Err(err) => {
+                    log::debug!(
+                        "clear_workspace_progress_via_client client lookup failed: {err:#}"
+                    );
+                    return;
+                }
+            };
+
+            if let Err(err) = inner
+                .client
+                .clear_workspace_progress(ClearWorkspaceProgress { workspace })
+                .await
+            {
+                log::debug!("clear_workspace_progress_via_client request failed: {err:#}");
+                return;
+            }
+
+            window.notify(TermWindowNotif::Apply(Box::new(move |term_window| {
+                term_window.refresh_workspace_metadata_cache();
+            })));
+        })
+        .detach();
+        true
+    }
+
+    pub(crate) fn set_task_center_entry_remain_on_exit(
+        &mut self,
+        entry: &TaskCenterEntry,
+        remain_on_exit: bool,
+    ) -> bool {
+        let Some(pane_id) = entry.pane_id else {
+            return false;
+        };
+
+        if Mux::get()
+            .set_task_pane_remain_on_exit(pane_id, remain_on_exit)
+            .is_none()
+        {
+            return false;
+        }
+
+        self.refresh_task_center_cache();
+        self.update_title_post_status();
+        true
     }
 
     fn window_contains_pane(&mut self, pane_id: PaneId) -> bool {
@@ -3759,7 +4057,15 @@ impl TermWindow {
         self.show_launcher_impl(args, 0);
     }
 
-    fn show_task_center(&mut self) {
+    pub(crate) fn show_task_center_for_workspace(&mut self, workspace: &str) {
+        self.show_task_center_with_scope(TaskCenterScope::for_workspace(workspace));
+    }
+
+    pub(crate) fn show_task_center_with_query(&mut self, query: &str) {
+        self.show_task_center_with_scope(TaskCenterScope::with_query(query));
+    }
+
+    fn show_task_center_with_scope(&mut self, scope: TaskCenterScope) {
         let mux = Mux::get();
         let Some(tab) = mux.get_active_tab_for_window(self.mux_window_id) else {
             return;
@@ -3767,12 +4073,16 @@ impl TermWindow {
         let Some(window) = self.window.clone() else {
             return;
         };
-        let entries = self.task_center_entries();
+        let entries = Self::scoped_task_center_entries_for(self.task_center_entries(), &scope);
         let (overlay, future) = start_overlay(self, &tab, move |_tab_id, term| {
             crate::overlay::task_center::task_center(entries, term, window)
         });
         self.assign_overlay(tab.tab_id(), overlay);
         promise::spawn::spawn(future).detach();
+    }
+
+    fn show_task_center(&mut self) {
+        self.show_task_center_with_scope(TaskCenterScope::default());
     }
 
     fn show_launcher_impl(&mut self, args: LauncherActionArgs, initial_choice_idx: usize) {
@@ -5807,7 +6117,11 @@ impl Drop for TermWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::{bell_notification_message, InputBroadcastMode, RenderableDimensions, TermWindow};
+    use super::{
+        bell_notification_message, InputBroadcastMode, RenderableDimensions, TaskCenterScope,
+        TermWindow,
+    };
+    use codec::{WorkspaceProgressState, WorkspaceStatusState};
     use mlua::AnyUserDataExt;
     use mux::tab::TabId;
     use mux::task_center::{TaskCenterEntry, TaskCenterKind, TaskCenterSource};
@@ -6033,6 +6347,125 @@ mod tests {
     fn single_tab_with_workspace_metadata_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
             true, true, false, 1, false, true
+        ));
+    }
+
+    #[test]
+    fn workspace_metadata_apply_cache_tracks_status_and_progress_records() {
+        let status_cache = TermWindow::workspace_status_cache_from_records(vec![
+            WorkspaceStatusState {
+                workspace: "unity-main".to_string(),
+                status: "building".to_string(),
+                updated_at: "2026-03-27T00:00:00Z".to_string(),
+            },
+            WorkspaceStatusState {
+                workspace: "unity-tools".to_string(),
+                status: "idle".to_string(),
+                updated_at: "2026-03-27T00:00:01Z".to_string(),
+            },
+        ]);
+        let progress_cache = TermWindow::workspace_progress_cache_from_records(vec![
+            WorkspaceProgressState {
+                workspace: "unity-main".to_string(),
+                value: 42,
+                updated_at: "2026-03-27T00:00:02Z".to_string(),
+            },
+            WorkspaceProgressState {
+                workspace: "unity-tools".to_string(),
+                value: 90,
+                updated_at: "2026-03-27T00:00:03Z".to_string(),
+            },
+        ]);
+
+        assert_eq!(
+            status_cache.get("unity-main"),
+            Some(&"building".to_string())
+        );
+        assert_eq!(status_cache.get("unity-tools"), Some(&"idle".to_string()));
+        assert_eq!(progress_cache.get("unity-main"), Some(&42));
+        assert_eq!(progress_cache.get("unity-tools"), Some(&90));
+    }
+
+    #[test]
+    fn workspace_metadata_task_center_scope_filters_workspace_and_query() {
+        let scoped_entries = TermWindow::scoped_task_center_entries_for(
+            vec![
+                TaskCenterEntry {
+                    label: "Build failed".to_string(),
+                    workspace: "unity-main".to_string(),
+                    source: TaskCenterSource::Notification,
+                    kind: TaskCenterKind::Notification,
+                    source_label: Some("build.failed".to_string()),
+                    kind_label: None,
+                    window_id: Some(1),
+                    tab_id: None,
+                    pane_id: None,
+                    unread_count: 1,
+                    notification_ids: vec!["n1".to_string()],
+                    is_failed: true,
+                    is_running: false,
+                    rerun_available: true,
+                    workspace_status: Some("blocked".to_string()),
+                    workspace_progress: Some(40),
+                },
+                TaskCenterEntry {
+                    label: "Workspace healthy".to_string(),
+                    workspace: "unity-tools".to_string(),
+                    source: TaskCenterSource::Workspace,
+                    kind: TaskCenterKind::Workspace,
+                    source_label: None,
+                    kind_label: None,
+                    window_id: Some(2),
+                    tab_id: None,
+                    pane_id: None,
+                    unread_count: 0,
+                    notification_ids: vec![],
+                    is_failed: false,
+                    is_running: false,
+                    rerun_available: false,
+                    workspace_status: Some("healthy".to_string()),
+                    workspace_progress: Some(90),
+                },
+            ],
+            &TaskCenterScope {
+                workspace: Some("unity-main".to_string()),
+                query: Some("build failed".to_string()),
+            },
+        );
+
+        assert_eq!(scoped_entries.len(), 1);
+        assert_eq!(scoped_entries[0].workspace, "unity-main");
+        assert_eq!(scoped_entries[0].label, "Build failed");
+    }
+
+    #[test]
+    fn workspace_metadata_task_center_query_matches_status_and_workspace_text() {
+        let entry = TaskCenterEntry {
+            label: "Planner".to_string(),
+            workspace: "unity-main".to_string(),
+            source: TaskCenterSource::Workspace,
+            kind: TaskCenterKind::Workspace,
+            source_label: None,
+            kind_label: None,
+            window_id: Some(1),
+            tab_id: None,
+            pane_id: None,
+            unread_count: 0,
+            notification_ids: vec![],
+            is_failed: false,
+            is_running: true,
+            rerun_available: false,
+            workspace_status: Some("blocked".to_string()),
+            workspace_progress: Some(50),
+        };
+
+        assert!(TermWindow::task_center_entry_matches_query(
+            &entry,
+            "unity blocked"
+        ));
+        assert!(!TermWindow::task_center_entry_matches_query(
+            &entry,
+            "build failed"
         ));
     }
 
