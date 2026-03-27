@@ -652,4 +652,50 @@ mod tests {
         assert!(row.contains("[blocked]"));
         assert!(row.contains("37%"));
     }
+
+    #[test]
+    fn task_center_active_row_exposes_inline_operator_actions_without_multiline_bodies() {
+        let mut task_pane = entry(
+            "Worker loop",
+            "unity-main",
+            TaskCenterSource::Pane,
+            TaskCenterKind::Pane,
+        );
+        task_pane.kind_label = Some("task-pane".to_string());
+        task_pane.unread_count = 2;
+        task_pane.notification_ids = vec!["notif-1".to_string()];
+        task_pane.is_failed = true;
+        task_pane.rerun_available = true;
+        task_pane.workspace_status = Some("blocked".to_string());
+        task_pane.workspace_progress = Some(42);
+
+        let row = TaskCenterOverlay::row_text_for_test(&task_pane, true);
+        assert!(!row.contains('\n'));
+        assert!(row.contains("[open]"));
+        assert!(row.contains("[clear]"));
+        assert!(row.contains("[rerun]"));
+        assert!(row.contains("[hold:"));
+        assert!(row.contains("[status]"));
+        assert!(row.contains("[progress]"));
+        assert!(row.contains("[clear-meta]"));
+    }
+
+    #[test]
+    fn task_center_header_copy_stays_within_three_lines_and_advertises_mouse_parity() {
+        let overlay = TaskCenterOverlay::new(vec![entry(
+            "Worker loop",
+            "unity-main",
+            TaskCenterSource::Pane,
+            TaskCenterKind::Pane,
+        )]);
+        let header = overlay.header_lines_for_test();
+
+        assert_eq!(header.len(), 3);
+        assert!(header[0].contains("Task Center"));
+        assert!(header[2].contains("Click=select"));
+        assert!(header[2].contains("Double-click/Enter=focus"));
+        assert!(header[2].contains("hold"));
+        assert!(header[2].contains("status"));
+        assert!(header[2].contains("progress"));
+    }
 }
