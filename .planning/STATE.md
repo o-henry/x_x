@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-27T16:49:08.790Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-27T16:55:14.438Z"
 last_activity: 2026-03-27
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 34
-  completed_plans: 30
+  completed_plans: 31
   percent: 100
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 07 (operator-visual-polish) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-03-27
 
@@ -61,6 +61,7 @@ Progress: [██████████] 100%
 | Phase 06-operator-ui-surfaces P02 | 9min | 2 tasks | 1 files |
 | Phase 06-operator-ui-surfaces P04 | 39min | 2 tasks | 6 files |
 | Phase 07 P02 | 53min | 2 tasks | 3 files |
+| Phase 07 P01 | 10min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 06-operator-ui-surfaces]: Canonical docs now describe Task Center as the primary operator surface with compact tabbar discoverability and prompt/confirm metadata editing.
 - [Phase 07]: Kept compute_tab_plain_title readable for rename and fallback paths while moving the rendered tabbar chrome to compact operator marker clusters.
 - [Phase 07]: Lowered fancy-tab height and padding through named density constants so the top strip can be tested and tuned as restrained application chrome.
+- [Phase 07]: Kept the operator rail edge-attached and icon-first by shrinking TermWindow geometry instead of adding another overlay surface.
+- [Phase 07]: Added compact rail regressions that assert against the old Phase 06 header/panel structure so future polish cannot silently widen the sidebar again.
+- [Phase 07]: Recorded the screenshot gate honestly after catching a stale binary and a macOS window-surfacing limitation instead of claiming visual sign-off without evidence.
 
 ### Pending Todos
 
@@ -102,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-27T16:49:08.782Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-03-27T16:55:14.429Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
