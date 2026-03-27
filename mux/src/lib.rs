@@ -84,9 +84,9 @@ use percent_encoding::percent_decode_str;
 use portable_pty::{CommandBuilder, ExitStatus, PtySize};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::ffi::OsString;
 #[cfg(windows)]
 use std::os::raw::c_int;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -249,7 +249,11 @@ fn duplicate_pane_output_to_tee(pane_id: PaneId, decoded: &[u8]) {
             }
         }
         Err(err) => {
-            log::error!("failed to open tee file for pane {} at {}: {err:#}", pane_id, path);
+            log::error!(
+                "failed to open tee file for pane {} at {}: {err:#}",
+                pane_id,
+                path
+            );
         }
     }
 }
@@ -1004,7 +1008,10 @@ impl Mux {
         }
     }
 
-    fn task_pane_context(&self, pane_id: PaneId) -> (Option<String>, Option<WindowId>, Option<TabId>) {
+    fn task_pane_context(
+        &self,
+        pane_id: PaneId,
+    ) -> (Option<String>, Option<WindowId>, Option<TabId>) {
         for window_id in self.iter_windows() {
             if let Some(window) = self.get_window(window_id) {
                 let workspace = window.get_workspace().to_string();
@@ -1625,6 +1632,11 @@ impl Mux {
         let remain_on_exit = matches!(exit_behavior, ExitBehavior::Hold) && !killed;
         let is_failed = !success;
         let existing = self.task_panes.read().task_pane(pane_id);
+        let current_working_dir = current_working_dir.or_else(|| {
+            existing
+                .as_ref()
+                .and_then(|record| record.current_working_dir.clone())
+        });
         let rerun = {
             let rerun = rerun_metadata_from_user_vars(user_vars);
             if rerun.is_empty() {
@@ -1693,7 +1705,8 @@ impl Mux {
     }
 
     pub fn task_pane_remain_on_exit(&self, pane_id: PaneId) -> Option<bool> {
-        self.task_pane_record(pane_id).map(|record| record.remain_on_exit)
+        self.task_pane_record(pane_id)
+            .map(|record| record.remain_on_exit)
     }
 
     pub fn set_task_pane_silenced(
@@ -1708,14 +1721,11 @@ impl Mux {
             task_panes.task_pane(pane_id)
         } else {
             let (workspace, window_id, tab_id) = self.task_pane_context(pane_id);
-            Some(self.task_panes.write().upsert_live(
-                pane_id,
-                workspace,
-                window_id,
-                tab_id,
-                false,
-                silenced,
-            ))
+            Some(
+                self.task_panes
+                    .write()
+                    .upsert_live(pane_id, workspace, window_id, tab_id, false, silenced),
+            )
         }?;
         self.notify(MuxNotification::TaskPaneLifecycleChanged(pane_id));
         Some(record)
@@ -2330,10 +2340,8 @@ impl Mux {
             (window_id, size)
         } else {
             term_config = None;
-            window_builder = self.new_empty_window(
-                Some(workspace_for_new_window.clone()),
-                window_position,
-            );
+            window_builder =
+                self.new_empty_window(Some(workspace_for_new_window.clone()), window_position);
             // Notify immediately so GUI can materialize the window while
             // the shell/domain spawn work is still in progress.
             window_builder.notify();
