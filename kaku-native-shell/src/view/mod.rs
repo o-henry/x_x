@@ -10,8 +10,8 @@ use crate::snapshot::{RuntimeSnapshot, ShellLayoutContract};
 use glib::value::ToValue;
 use gtk::gdk;
 use gtk::prelude::IsA;
-use gtk::prelude::*;
 use gtk::prelude::WidgetExt;
+use gtk::prelude::*;
 use gtk::{Align, Orientation, Paned, PolicyType};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -79,7 +79,7 @@ pub fn build_shell(
         if rail_collapsed {
             layout.collapsed_rail_width
         } else {
-            224.max(layout.rail_width)
+            layout.rail_width
         },
         -1,
     );
@@ -103,15 +103,15 @@ pub fn build_shell(
         workspace::build_workspace_panel(snapshot, arrangement.show_terminal_sessions);
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);
-    workspace_view.root.set_size_request(540, 320);
+    workspace_view.root.set_size_request(0, 280);
     let activity_view = context::build_activity_panel(snapshot);
     let metadata_view = context::build_metadata_panel(snapshot);
     activity_view.root.set_hexpand(true);
     activity_view.root.set_vexpand(true);
-    activity_view.root.set_size_request(420, 220);
+    activity_view.root.set_size_request(0, 220);
     metadata_view.root.set_hexpand(false);
     metadata_view.root.set_vexpand(true);
-    metadata_view.root.set_size_request(300, 220);
+    metadata_view.root.set_size_request(layout.side_split, 220);
 
     let metadata_host = gtk::Box::new(Orientation::Horizontal, 0);
     metadata_host.set_hexpand(false);
@@ -153,10 +153,10 @@ pub fn build_shell(
     let task_view = context::build_task_panel(snapshot);
     inbox_view.root.set_vexpand(true);
     inbox_view.root.set_hexpand(true);
-    inbox_view.root.set_size_request(layout.side_split, 240);
+    inbox_view.root.set_size_request(layout.side_split, 210);
     task_view.root.set_vexpand(true);
     task_view.root.set_hexpand(true);
-    task_view.root.set_size_request(layout.side_split, 220);
+    task_view.root.set_size_request(layout.side_split, 180);
     if arrangement.tasks_first {
         side_column.set_start_child(Some(&task_view.root));
         side_column.set_end_child(Some(&inbox_view.root));

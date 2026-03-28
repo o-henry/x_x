@@ -12,7 +12,7 @@ pub fn build_workspace_panel(
     show_terminal_sessions: bool,
 ) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
-    let body = gtk::Box::new(Orientation::Vertical, 14);
+    let body = gtk::Box::new(Orientation::Vertical, 10);
     body.add_css_class("pane-body");
     body.add_css_class("pane-content");
     body.set_margin_start(14);
@@ -112,13 +112,38 @@ fn shortcut_line(action: &str, combo: &str) -> gtk::Box {
 }
 
 fn workspace_snapshot_block(snapshot: &RuntimeSnapshot, show_terminal_sessions: bool) -> gtk::Box {
-    let block = gtk::Box::new(Orientation::Vertical, 10);
+    let block = gtk::Box::new(Orientation::Vertical, 8);
     block.add_css_class("workspace-block");
 
     block.append(&section_label("WORKTREE"));
     block.append(&detail_line(
         &current_workspace_cwd(snapshot).unwrap_or_else(|| "No active cwd".to_string()),
     ));
+
+    block.append(&section_label("TASK SNAPSHOT"));
+    let task_summary = snapshot
+        .task_panes
+        .iter()
+        .filter(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
+        .take(3)
+        .map(|pane| {
+            let state = if pane.is_failed {
+                "failed"
+            } else if pane.is_dead {
+                "dead"
+            } else {
+                "running"
+            };
+            format!("pane {} {}", pane.pane_id, state)
+        })
+        .collect::<Vec<_>>();
+    if task_summary.is_empty() {
+        block.append(&detail_line("No tracked task panes"));
+    } else {
+        for line in task_summary {
+            block.append(&detail_line(&line));
+        }
+    }
 
     block.append(&section_label("INBOX PREVIEW"));
     let unread = snapshot

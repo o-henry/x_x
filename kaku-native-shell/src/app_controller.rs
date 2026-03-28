@@ -97,7 +97,7 @@ impl AppController {
             rail_collapsed: Cell::new(false),
             metadata_first: Cell::new(false),
             tasks_first: Cell::new(false),
-            show_terminal_sessions: Cell::new(false),
+            show_terminal_sessions: Cell::new(true),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),

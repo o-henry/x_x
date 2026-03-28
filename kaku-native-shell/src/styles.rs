@@ -17,6 +17,15 @@ pub fn install_css() {
           background: #101116;
         }
 
+        button,
+        button:hover,
+        button:focus,
+        button:focus-visible,
+        button:active {
+          outline: none;
+          box-shadow: none;
+        }
+
         .shell-split separator {
           background: rgba(255,255,255,0.014);
           min-width: 1px;
@@ -102,6 +111,15 @@ pub fn install_css() {
           color: #f3f4f8;
         }
 
+        .rail-row:focus,
+        .rail-row:focus-visible,
+        .rail-toggle:focus,
+        .rail-toggle:focus-visible {
+          outline: none;
+          box-shadow: none;
+          border: none;
+        }
+
         .pane-panel {
           background: #111318;
           border: 1px solid rgba(255,255,255,0.06);
@@ -114,6 +132,7 @@ pub fn install_css() {
           background: #171920;
           border-bottom: 1px solid rgba(255,255,255,0.06);
           min-height: 32px;
+          padding: 0;
         }
 
         .pane-titlebar:hover {
@@ -218,7 +237,7 @@ pub fn install_css() {
         }
 
         .workspace-block {
-          margin-top: 4px;
+          margin-top: 2px;
           padding-top: 6px;
           border-top: 1px solid rgba(255,255,255,0.05);
         }
