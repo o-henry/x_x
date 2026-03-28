@@ -13,6 +13,7 @@ use gtk::prelude::IsA;
 use gtk::prelude::WidgetExt;
 use gtk::prelude::*;
 use gtk::{Align, Orientation, Paned, PolicyType};
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PaneArrangement {
@@ -33,8 +34,11 @@ pub struct ShellView {
     pub chrome_drag_handle: gtk::Box,
     pub refresh_button: gtk::Button,
     pub terminal_button: gtk::Button,
-    pub rail_toggle_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
+    pub activity_panel: gtk::Box,
+    pub metadata_panel: gtk::Box,
+    pub inbox_panel: gtk::Box,
+    pub tasks_panel: gtk::Box,
     pub activity_header: gtk::Box,
     pub metadata_header: gtk::Box,
     pub inbox_header: gtk::Box,
@@ -138,17 +142,11 @@ pub fn build_shell(
     center_column.set_start_child(Some(&workspace_view.root));
     center_column.set_end_child(Some(&lower_center));
 
-    let side_column = gtk::Paned::new(Orientation::Vertical);
-    side_column.add_css_class("shell-split");
-    side_column.set_wide_handle(true);
-    side_column.set_resize_start_child(true);
-    side_column.set_resize_end_child(true);
-    side_column.set_shrink_start_child(false);
-    side_column.set_shrink_end_child(false);
+    let side_column = gtk::Box::new(Orientation::Vertical, 0);
+    side_column.add_css_class("side-column");
     side_column.set_hexpand(false);
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
-    side_column.set_position(layout.side_split);
     let inbox_view = context::build_inbox_panel(snapshot);
     let task_view = context::build_task_panel(snapshot);
     inbox_view.root.set_vexpand(true);
@@ -158,11 +156,11 @@ pub fn build_shell(
     task_view.root.set_hexpand(true);
     task_view.root.set_size_request(layout.side_split, 180);
     if arrangement.tasks_first {
-        side_column.set_start_child(Some(&task_view.root));
-        side_column.set_end_child(Some(&inbox_view.root));
+        side_column.append(&task_view.root);
+        side_column.append(&inbox_view.root);
     } else {
-        side_column.set_start_child(Some(&inbox_view.root));
-        side_column.set_end_child(Some(&task_view.root));
+        side_column.append(&inbox_view.root);
+        side_column.append(&task_view.root);
     }
 
     let side_host = gtk::Box::new(Orientation::Horizontal, 0);
@@ -212,8 +210,11 @@ pub fn build_shell(
         chrome_drag_handle: chrome_view.root.clone(),
         refresh_button: chrome_view.refresh_button,
         terminal_button: chrome_view.terminal_button,
-        rail_toggle_button: rail_view.toggle_button,
         rail_buttons: rail_view.workspace_buttons,
+        activity_panel: activity_view.root.clone(),
+        metadata_panel: metadata_view.root.clone(),
+        inbox_panel: inbox_view.root.clone(),
+        tasks_panel: task_view.root.clone(),
         activity_header: activity_view.header,
         metadata_header: metadata_view.header,
         inbox_header: inbox_view.header,
@@ -315,10 +316,12 @@ pub(crate) fn scroller(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
 
 pub(crate) fn bind_header_swap(
     source: &gtk::Box,
-    target: &gtk::Box,
+    target_header: &gtk::Box,
+    target_body: &gtk::Box,
     tag: &'static str,
     on_drop: impl Fn() + 'static,
 ) {
+    let on_drop = Rc::new(on_drop);
     let drag_source = gtk::DragSource::builder()
         .actions(gdk::DragAction::MOVE)
         .build();
@@ -327,17 +330,62 @@ pub(crate) fn bind_header_swap(
     source.add_controller(drag_source);
 
     let drop_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
+    let target_header_enter = target_header.clone();
+    let target_body_enter = target_body.clone();
+    drop_target.connect_enter(move |_, _, _| {
+        target_header_enter.add_css_class("drop-target");
+        target_body_enter.add_css_class("drop-target");
+        gdk::DragAction::MOVE
+    });
+    let target_header_leave = target_header.clone();
+    let target_body_leave = target_body.clone();
+    drop_target.connect_leave(move |_| {
+        target_header_leave.remove_css_class("drop-target");
+        target_body_leave.remove_css_class("drop-target");
+    });
+    let target_header_drop = target_header.clone();
+    let target_body_drop = target_body.clone();
+    let on_drop_header = Rc::clone(&on_drop);
     drop_target.connect_drop(move |_, value, _, _| {
+        target_header_drop.remove_css_class("drop-target");
+        target_body_drop.remove_css_class("drop-target");
         let Ok(payload) = value.get::<String>() else {
             return false;
         };
         if payload == tag {
-            on_drop();
+            on_drop_header();
             return true;
         }
         false
     });
-    target.add_controller(drop_target);
+    target_header.add_controller(drop_target);
+
+    let body_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
+    let body_header_enter = target_header.clone();
+    let body_target_enter = target_body.clone();
+    body_target.connect_enter(move |_, _, _| {
+        body_header_enter.add_css_class("drop-target");
+        body_target_enter.add_css_class("drop-target");
+        gdk::DragAction::MOVE
+    });
+    let body_header_leave = target_header.clone();
+    let body_target_leave = target_body.clone();
+    body_target.connect_leave(move |_| {
+        body_header_leave.remove_css_class("drop-target");
+        body_target_leave.remove_css_class("drop-target");
+    });
+    let on_drop_body = Rc::clone(&on_drop);
+    body_target.connect_drop(move |_, value, _, _| {
+        let Ok(payload) = value.get::<String>() else {
+            return false;
+        };
+        if payload == tag {
+            on_drop_body();
+            return true;
+        }
+        false
+    });
+    target_body.add_controller(body_target);
 }
 
 pub(crate) fn pill(label: &str) -> gtk::Label {

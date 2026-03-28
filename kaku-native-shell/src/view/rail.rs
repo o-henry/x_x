@@ -2,12 +2,9 @@ use crate::snapshot::RuntimeSnapshot;
 use crate::view::workspace::workspace_status_tokens;
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
-use std::path::PathBuf;
-
 pub struct RailView {
     pub root: gtk::Box,
     pub workspace_buttons: Vec<(String, gtk::Button)>,
-    pub toggle_button: gtk::Button,
 }
 
 pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
@@ -32,14 +29,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
         eyebrow.set_visible(false);
     }
 
-    let toggle_button = gtk::Button::new();
-    toggle_button.add_css_class("rail-toggle");
-    let icon = gtk::Image::from_file(rail_toggle_icon_path(collapsed));
-    icon.set_pixel_size(14);
-    toggle_button.set_child(Some(&icon));
-
     header.append(&eyebrow);
-    header.append(&toggle_button);
     rail.append(&header);
 
     let mut workspace_buttons = Vec::new();
@@ -148,16 +138,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
     RailView {
         root: rail,
         workspace_buttons,
-        toggle_button,
     }
-}
-
-fn rail_toggle_icon_path(collapsed: bool) -> PathBuf {
-    let icon_name = if collapsed { "opend.svg" } else { "closed.svg" };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join("icons")
-        .join(icon_name)
 }
 
 pub fn workspace_badge_text(

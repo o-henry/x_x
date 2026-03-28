@@ -65,6 +65,10 @@ pub fn install_css() {
           border-right: 1px solid rgba(255,255,255,0.05);
         }
 
+        .side-column > box {
+          min-height: 0;
+        }
+
         .rail-row {
           padding: 12px 16px;
           border-radius: 0;
@@ -93,28 +97,10 @@ pub fn install_css() {
           color: #94a8db;
         }
 
-        .rail-toggle {
-          background: transparent;
-          border: none;
-          border-radius: 0;
-          min-width: 18px;
-          min-height: 18px;
-          padding: 0;
-          box-shadow: none;
-        }
-
-        .rail-toggle:hover {
-          background: rgba(255,255,255,0.04);
-        }
-
-        .rail-toggle image {
-          color: #f3f4f8;
-        }
-
         .rail-row:focus,
         .rail-row:focus-visible,
-        .rail-toggle:focus,
-        .rail-toggle:focus-visible {
+        .pane-titlebar:focus,
+        .pane-titlebar:focus-visible {
           outline: none;
           box-shadow: none;
           border: none;
@@ -137,6 +123,11 @@ pub fn install_css() {
 
         .pane-titlebar:hover {
           background: #191c23;
+        }
+
+        .pane-titlebar.drop-target,
+        .pane-surface.drop-target {
+          background: #1c2028;
         }
 
         .pane-header {

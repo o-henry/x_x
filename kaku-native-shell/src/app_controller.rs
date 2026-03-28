@@ -222,8 +222,11 @@ impl AppController {
             chrome_drag_handle,
             refresh_button,
             terminal_button,
-            rail_toggle_button,
             rail_buttons,
+            activity_panel,
+            metadata_panel,
+            inbox_panel,
+            tasks_panel,
             activity_header,
             metadata_header,
             inbox_header,
@@ -265,11 +268,6 @@ impl AppController {
                 this.defer(|controller| controller.toggle_terminal_sessions())
             });
         }
-        {
-            let this = Rc::clone(self);
-            rail_toggle_button
-                .connect_clicked(move |_| this.defer(|controller| controller.toggle_rail()));
-        }
         for (workspace, button) in rail_buttons {
             let this = Rc::clone(self);
             button.connect_clicked(move |_| {
@@ -282,6 +280,7 @@ impl AppController {
             bind_header_swap(
                 &activity_header,
                 &metadata_header,
+                &metadata_panel,
                 "lower-swap",
                 move || this.defer(|controller| controller.toggle_lower_panes()),
             );
@@ -291,21 +290,30 @@ impl AppController {
             bind_header_swap(
                 &metadata_header,
                 &activity_header,
+                &activity_panel,
                 "lower-swap",
                 move || this.defer(|controller| controller.toggle_lower_panes()),
             );
         }
         {
             let this = Rc::clone(self);
-            bind_header_swap(&inbox_header, &tasks_header, "side-swap", move || {
-                this.defer(|controller| controller.toggle_side_panes())
-            });
+            bind_header_swap(
+                &inbox_header,
+                &tasks_header,
+                &tasks_panel,
+                "side-swap",
+                move || this.defer(|controller| controller.toggle_side_panes()),
+            );
         }
         {
             let this = Rc::clone(self);
-            bind_header_swap(&tasks_header, &inbox_header, "side-swap", move || {
-                this.defer(|controller| controller.toggle_side_panes())
-            });
+            bind_header_swap(
+                &tasks_header,
+                &inbox_header,
+                &inbox_panel,
+                "side-swap",
+                move || this.defer(|controller| controller.toggle_side_panes()),
+            );
         }
 
         self.window.set_content(Some(&root));
@@ -361,8 +369,13 @@ impl AppController {
             let this = Rc::clone(self);
             move || this.append_log_for_selected()
         });
+        self.install_action("toggle-rail", {
+            let this = Rc::clone(self);
+            move || this.toggle_rail()
+        });
 
         app.set_accels_for_action("win.launch-terminal", &["<Meta>t"]);
+        app.set_accels_for_action("win.toggle-rail", &["<Meta>b"]);
         app.set_accels_for_action("win.set-status", &["<Meta><Shift>s"]);
         app.set_accels_for_action("win.clear-status", &["<Meta><Shift>x"]);
         app.set_accels_for_action("win.set-progress", &["<Meta><Shift>p"]);

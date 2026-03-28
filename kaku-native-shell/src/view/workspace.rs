@@ -53,6 +53,7 @@ pub fn build_workspace_panel(
     shortcut_legend.add_css_class("shortcut-legend");
     for (label, accel) in [
         ("TERMINAL SESSIONS", "CMD+T"),
+        ("WORKSPACES", "CMD+B"),
         ("STATUS", "CMD+SHIFT+S"),
         ("CLEAR STATUS", "CMD+SHIFT+X"),
         ("PROGRESS", "CMD+SHIFT+P"),
