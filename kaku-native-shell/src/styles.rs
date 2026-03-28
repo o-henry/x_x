@@ -92,6 +92,11 @@ pub fn install_css() {
           padding-bottom: 12px;
         }
 
+        .rail-footer-spacer {
+          min-height: 12px;
+          background: #121318;
+        }
+
         .side-column > box {
           min-height: 0;
         }
