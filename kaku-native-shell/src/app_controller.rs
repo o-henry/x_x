@@ -4,7 +4,7 @@ use crate::snapshot::{
     derive_runtime_snapshot, refresh_scope_for_notification, RuntimeSnapshot, ShellLayoutContract,
     SnapshotRefreshScope,
 };
-use crate::view::{build_shell, ShellView};
+use crate::view::{build_shell, PaneArrangement, ShellView};
 use adw::prelude::*;
 use gio::SimpleAction;
 use gtk::gdk;
@@ -75,6 +75,8 @@ pub struct AppController {
     pub window: adw::ApplicationWindow,
     selected_workspace: RefCell<Option<String>>,
     rail_collapsed: Cell<bool>,
+    metadata_first: Cell<bool>,
+    tasks_first: Cell<bool>,
     pending_refresh_scopes: Arc<Mutex<Vec<SnapshotRefreshScope>>>,
     runtime_error: RefCell<Option<String>>,
     runtime_online: Cell<bool>,
@@ -94,6 +96,8 @@ impl AppController {
             window,
             selected_workspace: RefCell::new(None),
             rail_collapsed: Cell::new(false),
+            metadata_first: Cell::new(false),
+            tasks_first: Cell::new(false),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),
@@ -124,10 +128,17 @@ impl AppController {
 
     pub fn rerender(self: &Rc<Self>) {
         let snapshot = self.snapshot();
+        let width = self.window.width();
+        let compact = width > 0 && width < 1260;
         let shell = build_shell(
             &snapshot,
             &ShellLayoutContract::default(),
             self.rail_collapsed.get(),
+            PaneArrangement {
+                compact,
+                metadata_first: self.metadata_first.get(),
+                tasks_first: self.tasks_first.get(),
+            },
         );
         self.bind_shell_view(shell);
     }
@@ -213,6 +224,8 @@ impl AppController {
             rail_toggle_button,
             rail_buttons,
             inbox_mark_read_button,
+            swap_lower_button,
+            swap_side_button,
         } = shell;
 
         {
@@ -268,6 +281,16 @@ impl AppController {
                 this.defer(|controller| controller.mark_notifications_read_for_selected())
             });
         }
+        if let Some(swap_lower_button) = swap_lower_button {
+            let this = Rc::clone(self);
+            swap_lower_button
+                .connect_clicked(move |_| this.defer(|controller| controller.toggle_lower_panes()));
+        }
+        if let Some(swap_side_button) = swap_side_button {
+            let this = Rc::clone(self);
+            swap_side_button
+                .connect_clicked(move |_| this.defer(|controller| controller.toggle_side_panes()));
+        }
 
         self.window.set_content(Some(&root));
     }
@@ -284,6 +307,16 @@ impl AppController {
 
     fn toggle_rail(self: &Rc<Self>) {
         self.rail_collapsed.set(!self.rail_collapsed.get());
+        self.rerender();
+    }
+
+    fn toggle_lower_panes(self: &Rc<Self>) {
+        self.metadata_first.set(!self.metadata_first.get());
+        self.rerender();
+    }
+
+    fn toggle_side_panes(self: &Rc<Self>) {
+        self.tasks_first.set(!self.tasks_first.get());
         self.rerender();
     }
 

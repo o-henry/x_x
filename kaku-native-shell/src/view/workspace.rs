@@ -1,5 +1,5 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
-use crate::view::{empty_state, pane_panel, pill, scroller};
+use crate::view::{pane_panel, pill};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
@@ -68,28 +68,6 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     WorkspacePanelView { root: frame.root }
 }
 
-pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
-    let frame = pane_panel("Activity", None, Option::<&gtk::Widget>::None);
-    if snapshot.logs.is_empty() {
-        frame
-            .body
-            .append(&empty_state("No workspace log entries yet."));
-        return frame.root;
-    }
-
-    let list = gtk::Box::new(Orientation::Vertical, 8);
-    list.add_css_class("pane-content");
-    list.set_margin_start(14);
-    list.set_margin_end(14);
-    list.set_margin_top(14);
-    list.set_margin_bottom(14);
-    for row in snapshot.logs.iter().rev().take(12) {
-        list.append(&log_row(row.seq, &row.message));
-    }
-    frame.body.append(&scroller(&list));
-    frame.root
-}
-
 pub fn workspace_status_tokens(
     status: Option<&str>,
     progress: Option<u8>,
@@ -109,24 +87,6 @@ fn current_workspace_summary(snapshot: &RuntimeSnapshot) -> &WorkspaceSummary {
         .find(|summary| summary.name == snapshot.active_workspace)
         .or_else(|| snapshot.workspaces.first())
         .expect("at least one workspace summary")
-}
-
-fn log_row(seq: u64, message: &str) -> gtk::Box {
-    let outer = gtk::Box::new(Orientation::Vertical, 4);
-    outer.add_css_class("list-row");
-
-    let title = gtk::Label::new(Some(&format!("log #{seq}")));
-    title.set_halign(Align::Start);
-    title.add_css_class("row-title");
-
-    let detail = gtk::Label::new(Some(message));
-    detail.set_halign(Align::Start);
-    detail.set_wrap(true);
-    detail.add_css_class("row-detail");
-
-    outer.append(&title);
-    outer.append(&detail);
-    outer
 }
 
 fn shortcut_line(action: &str, combo: &str) -> gtk::Box {

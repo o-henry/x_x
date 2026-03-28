@@ -233,6 +233,10 @@ pub fn install_css() {
           margin-top: 12px;
         }
 
+        .compact-stack > box {
+          margin-bottom: 0;
+        }
+
         scrolledwindow scrollbar,
         scrolledwindow scrollbar slider {
           min-width: 0;

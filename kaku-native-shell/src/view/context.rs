@@ -6,13 +6,26 @@ use gtk::{Align, Orientation};
 pub struct InboxPanelView {
     pub root: gtk::Box,
     pub mark_read_button: Option<gtk::Button>,
+    pub swap_button: Option<gtk::Button>,
 }
 
-pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
+pub fn build_inbox_panel(snapshot: &RuntimeSnapshot, show_swap: bool) -> InboxPanelView {
     let mark_read = action_button("Mark Read");
     mark_read.add_css_class("subtle");
     mark_read.add_css_class("text-only");
-    let frame = pane_panel("Inbox", None, Some(&mark_read));
+    let header_actions = gtk::Box::new(Orientation::Horizontal, 8);
+    header_actions.append(&mark_read);
+    let swap_button = if show_swap {
+        let button = action_button("Swap");
+        button.add_css_class("subtle");
+        button.add_css_class("text-only");
+        header_actions.append(&button);
+        Some(button)
+    } else {
+        None
+    };
+
+    let frame = pane_panel("Inbox", None, Some(&header_actions));
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
         .notifications
@@ -21,15 +34,14 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
         .cloned()
         .collect::<Vec<_>>();
 
-    let mark_read_button = Some(mark_read);
-
     if unread.is_empty() {
         frame
             .body
             .append(&empty_state("No unread notifications in this workspace."));
         return InboxPanelView {
             root: frame.root,
-            mark_read_button,
+            mark_read_button: Some(mark_read.clone()),
+            swap_button,
         };
     }
 
@@ -47,7 +59,8 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
     frame.body.append(&scroller(&list));
     InboxPanelView {
         root: frame.root,
-        mark_read_button,
+        mark_read_button: Some(mark_read),
+        swap_button,
     }
 }
 
@@ -143,6 +156,57 @@ pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
     ));
     frame.body.append(&body);
     frame.root
+}
+
+pub struct ActivityPanelView {
+    pub root: gtk::Box,
+    pub swap_button: Option<gtk::Button>,
+}
+
+pub fn build_activity_panel(snapshot: &RuntimeSnapshot, show_swap: bool) -> ActivityPanelView {
+    let header_actions = if show_swap {
+        let button = action_button("Swap");
+        button.add_css_class("subtle");
+        button.add_css_class("text-only");
+        let host = gtk::Box::new(Orientation::Horizontal, 8);
+        host.append(&button);
+        Some((host, button))
+    } else {
+        None
+    };
+
+    let frame = pane_panel(
+        "Activity",
+        None,
+        header_actions.as_ref().map(|(host, _)| host),
+    );
+    if snapshot.logs.is_empty() {
+        frame
+            .body
+            .append(&empty_state("No workspace log entries yet."));
+        return ActivityPanelView {
+            root: frame.root,
+            swap_button: header_actions.map(|(_, button)| button),
+        };
+    }
+
+    let list = gtk::Box::new(Orientation::Vertical, 8);
+    list.add_css_class("pane-content");
+    list.set_margin_start(14);
+    list.set_margin_end(14);
+    list.set_margin_top(14);
+    list.set_margin_bottom(14);
+    for row in snapshot.logs.iter().rev().take(12) {
+        list.append(&notification_row(
+            &format!("log #{}", row.seq),
+            &row.message,
+        ));
+    }
+    frame.body.append(&scroller(&list));
+    ActivityPanelView {
+        root: frame.root,
+        swap_button: header_actions.map(|(_, button)| button),
+    }
 }
 
 fn notification_row(title_text: &str, detail_text: &str) -> gtk::Box {

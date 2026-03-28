@@ -43,6 +43,11 @@ fn active_context_label(snapshot: &RuntimeSnapshot) -> String {
         .find(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
         .and_then(|row| row.current_working_dir.as_ref())
         .map(|cwd| shorten_cwd(cwd))
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|path| path.to_str().map(|s| shorten_cwd(s)))
+        })
         .unwrap_or_else(|| snapshot.active_workspace.clone())
 }
 

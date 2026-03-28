@@ -13,6 +13,13 @@ use gtk::prelude::*;
 use gtk::prelude::{EventControllerExt, GestureSingleExt, NativeExt, WidgetExt};
 use gtk::{Align, Orientation, Paned, PolicyType};
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PaneArrangement {
+    pub compact: bool,
+    pub metadata_first: bool,
+    pub tasks_first: bool,
+}
+
 pub struct PaneFrame {
     pub root: gtk::Box,
     pub body: gtk::Box,
@@ -26,6 +33,8 @@ pub struct ShellView {
     pub rail_toggle_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
     pub inbox_mark_read_button: Option<gtk::Button>,
+    pub swap_lower_button: Option<gtk::Button>,
+    pub swap_side_button: Option<gtk::Button>,
 }
 
 pub fn shell_slot_order() -> [&'static str; 7] {
@@ -48,6 +57,7 @@ pub fn build_shell(
     snapshot: &RuntimeSnapshot,
     layout: &ShellLayoutContract,
     rail_collapsed: bool,
+    arrangement: PaneArrangement,
 ) -> ShellView {
     let root = gtk::Box::new(Orientation::Vertical, 0);
     root.add_css_class("shell-root");
@@ -89,11 +99,11 @@ pub fn build_shell(
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);
     workspace_view.root.set_size_request(540, 320);
-    let activity_panel = workspace::build_activity_panel(snapshot);
+    let activity_view = context::build_activity_panel(snapshot, !arrangement.compact);
     let metadata_panel = context::build_metadata_panel(snapshot);
-    activity_panel.set_hexpand(true);
-    activity_panel.set_vexpand(true);
-    activity_panel.set_size_request(420, 220);
+    activity_view.root.set_hexpand(true);
+    activity_view.root.set_vexpand(true);
+    activity_view.root.set_size_request(420, 220);
     metadata_panel.set_hexpand(false);
     metadata_panel.set_vexpand(true);
     metadata_panel.set_size_request(300, 220);
@@ -112,8 +122,13 @@ pub fn build_shell(
     lower_center.set_shrink_start_child(false);
     lower_center.set_shrink_end_child(false);
     lower_center.set_position(layout.lower_split);
-    lower_center.set_start_child(Some(&activity_panel));
-    lower_center.set_end_child(Some(&metadata_host));
+    if arrangement.metadata_first {
+        lower_center.set_start_child(Some(&metadata_host));
+        lower_center.set_end_child(Some(&activity_view.root));
+    } else {
+        lower_center.set_start_child(Some(&activity_view.root));
+        lower_center.set_end_child(Some(&metadata_host));
+    }
 
     center_column.set_start_child(Some(&workspace_view.root));
     center_column.set_end_child(Some(&lower_center));
@@ -129,7 +144,7 @@ pub fn build_shell(
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
     side_column.set_position(layout.side_split);
-    let inbox_view = context::build_inbox_panel(snapshot);
+    let inbox_view = context::build_inbox_panel(snapshot, !arrangement.compact);
     let task_panel = context::build_task_panel(snapshot);
     inbox_view.root.set_vexpand(true);
     inbox_view.root.set_hexpand(true);
@@ -137,8 +152,13 @@ pub fn build_shell(
     task_panel.set_vexpand(true);
     task_panel.set_hexpand(true);
     task_panel.set_size_request(layout.side_split, 220);
-    side_column.set_start_child(Some(&inbox_view.root));
-    side_column.set_end_child(Some(&task_panel));
+    if arrangement.tasks_first {
+        side_column.set_start_child(Some(&task_panel));
+        side_column.set_end_child(Some(&inbox_view.root));
+    } else {
+        side_column.set_start_child(Some(&inbox_view.root));
+        side_column.set_end_child(Some(&task_panel));
+    }
 
     let side_host = gtk::Box::new(Orientation::Horizontal, 0);
     side_host.set_hexpand(false);
@@ -156,10 +176,29 @@ pub fn build_shell(
     body_split.set_shrink_start_child(false);
     body_split.set_shrink_end_child(false);
     body_split.set_position(layout.body_split);
-    body_split.set_start_child(Some(&center_column));
-    body_split.set_end_child(Some(&side_host));
-
-    body.append(&body_split);
+    if arrangement.compact {
+        let compact_stack = gtk::Box::new(Orientation::Vertical, 12);
+        compact_stack.add_css_class("compact-stack");
+        compact_stack.set_hexpand(true);
+        compact_stack.set_vexpand(true);
+        compact_stack.set_margin_start(0);
+        compact_stack.set_margin_end(0);
+        compact_stack.set_margin_top(0);
+        compact_stack.set_margin_bottom(0);
+        compact_stack.append(&workspace_view.root);
+        compact_stack.append(&activity_view.root);
+        compact_stack.append(&metadata_panel);
+        compact_stack.append(&inbox_view.root);
+        compact_stack.append(&task_panel);
+        let compact_scroll = scroller(&compact_stack);
+        compact_scroll.set_hexpand(true);
+        compact_scroll.set_vexpand(true);
+        body.append(&compact_scroll);
+    } else {
+        body_split.set_start_child(Some(&center_column));
+        body_split.set_end_child(Some(&side_host));
+        body.append(&body_split);
+    }
 
     root.append(&body);
 
@@ -171,6 +210,8 @@ pub fn build_shell(
         rail_toggle_button: rail_view.toggle_button,
         rail_buttons: rail_view.workspace_buttons,
         inbox_mark_read_button: inbox_view.mark_read_button,
+        swap_lower_button: activity_view.swap_button,
+        swap_side_button: inbox_view.swap_button,
     }
 }
 
