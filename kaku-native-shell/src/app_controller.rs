@@ -7,6 +7,10 @@ use crate::snapshot::{
 use crate::view::{build_shell, ShellView};
 use adw::prelude::*;
 use gio::SimpleAction;
+use gtk::gdk;
+use gtk::gdk::prelude::ToplevelExt;
+use gtk::prelude::{EventControllerExt, GestureSingleExt, NativeExt, WidgetExt};
+use gtk::GestureClick;
 use mux::Mux;
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -201,6 +205,7 @@ impl AppController {
     fn bind_shell_view(self: &Rc<Self>, shell: ShellView) {
         let ShellView {
             root,
+            chrome_drag_handle,
             refresh_button,
             terminal_button,
             rail_toggle_button,
@@ -208,6 +213,31 @@ impl AppController {
             workspace_actions,
             inbox_mark_read_button,
         } = shell;
+
+        {
+            let window = self.window.clone();
+            let drag = GestureClick::new();
+            drag.set_button(1);
+            drag.connect_pressed(move |gesture, _, x, y| {
+                let Some(device) = gesture.current_event_device() else {
+                    return;
+                };
+                let Some(surface) = window.surface() else {
+                    return;
+                };
+                let Ok(toplevel) = surface.dynamic_cast::<gdk::Toplevel>() else {
+                    return;
+                };
+                toplevel.begin_move(
+                    &device,
+                    gesture.current_button() as i32,
+                    x,
+                    y,
+                    gesture.current_event_time(),
+                );
+            });
+            chrome_drag_handle.add_controller(drag);
+        }
 
         {
             let this = Rc::clone(self);

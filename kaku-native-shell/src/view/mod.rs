@@ -22,6 +22,7 @@ pub struct WorkspaceActionButtons {
 
 pub struct ShellView {
     pub root: gtk::Box,
+    pub chrome_drag_handle: gtk::Box,
     pub refresh_button: gtk::Button,
     pub terminal_button: gtk::Button,
     pub rail_toggle_button: gtk::Button,
@@ -135,6 +136,7 @@ pub fn build_shell(
 
     ShellView {
         root,
+        chrome_drag_handle: chrome_view.root.clone(),
         refresh_button: chrome_view.refresh_button,
         terminal_button: chrome_view.terminal_button,
         rail_toggle_button: rail_view.toggle_button,
