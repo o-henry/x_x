@@ -69,7 +69,7 @@ use clap::builder::ValueParser;
 use clap::{Parser, ValueHint};
 use config::keyassignment::{SpawnCommand, SpawnTabDomain};
 use config::ConfigHandle;
-use kaku_runtime::{build_initial_mux, prepare_gui_runtime_env, spawn_mux_server};
+use kaku_runtime::{build_initial_mux, publish_mux_runtime};
 use mux::activity::Activity;
 use mux::domain::Domain;
 use mux::Mux;
@@ -339,13 +339,8 @@ async fn async_run_terminal_gui(
     opts: StartCommand,
     should_publish: bool,
 ) -> anyhow::Result<()> {
-    let unix_socket_path = prepare_gui_runtime_env()?;
-
-    if let Err(err) = spawn_mux_server(
-        unix_socket_path,
-        should_publish,
-        &crate::termwindow::get_window_class(),
-    ) {
+    if let Err(err) = publish_mux_runtime(&crate::termwindow::get_window_class(), should_publish)
+    {
         log::warn!("{:#}", err);
     }
 

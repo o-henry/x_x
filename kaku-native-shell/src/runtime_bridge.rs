@@ -1,4 +1,5 @@
 use mux::Mux;
+use std::path::PathBuf;
 use std::sync::Arc;
 use wezterm_gui_subcommands::DEFAULT_WINDOW_CLASS;
 
@@ -27,14 +28,40 @@ impl NativeShellBootstrapPlan {
     }
 }
 
+pub struct NativeShellBootstrapResult {
+    pub mux: Arc<Mux>,
+    pub unix_socket_path: PathBuf,
+}
+
+pub struct RuntimeOwnershipProof {
+    pub primary_shell: &'static str,
+    pub fallback_shell: &'static str,
+    pub socket_env_var: &'static str,
+    pub socket_file_prefix: &'static str,
+}
+
+impl RuntimeOwnershipProof {
+    pub fn default() -> Self {
+        Self {
+            primary_shell: "kaku-native-shell",
+            fallback_shell: "kaku-gui",
+            socket_env_var: "KAKU_UNIX_SOCKET",
+            socket_file_prefix: "gui-sock-",
+        }
+    }
+}
+
 pub fn bootstrap_native_shell_runtime(
     plan: &NativeShellBootstrapPlan,
-) -> anyhow::Result<Arc<Mux>> {
-    kaku_runtime::bootstrap_gui_runtime(
+) -> anyhow::Result<NativeShellBootstrapResult> {
+    let result = kaku_runtime::bootstrap_native_shell_runtime(
         &plan.window_class,
         plan.default_domain.as_deref(),
         plan.default_workspace.as_deref(),
         plan.should_publish,
-    )
+    )?;
+    Ok(NativeShellBootstrapResult {
+        mux: result.mux,
+        unix_socket_path: result.unix_socket_path,
+    })
 }
-

@@ -6,6 +6,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wezterm_mux_server_impl::update_mux_domains;
 
+pub struct RuntimeBootstrapResult {
+    pub mux: Arc<Mux>,
+    pub unix_socket_path: PathBuf,
+}
+
 pub fn prepare_gui_runtime_env() -> anyhow::Result<PathBuf> {
     let unix_socket_path =
         config::RUNTIME_DIR.join(format!("gui-sock-{}", unsafe { libc::getpid() }));
@@ -42,6 +47,15 @@ pub fn spawn_mux_server(
     });
 
     Ok(())
+}
+
+pub fn publish_mux_runtime(
+    window_class: &str,
+    should_publish: bool,
+) -> anyhow::Result<PathBuf> {
+    let unix_socket_path = prepare_gui_runtime_env()?;
+    spawn_mux_server(unix_socket_path.clone(), should_publish, window_class)?;
+    Ok(unix_socket_path)
 }
 
 pub fn setup_mux(
@@ -95,9 +109,26 @@ pub fn bootstrap_gui_runtime(
     default_workspace_name: Option<&str>,
     should_publish: bool,
 ) -> anyhow::Result<Arc<Mux>> {
+    Ok(bootstrap_native_shell_runtime(
+        window_class,
+        default_domain_name,
+        default_workspace_name,
+        should_publish,
+    )?
+    .mux)
+}
+
+pub fn bootstrap_native_shell_runtime(
+    window_class: &str,
+    default_domain_name: Option<&str>,
+    default_workspace_name: Option<&str>,
+    should_publish: bool,
+) -> anyhow::Result<RuntimeBootstrapResult> {
     let config = config::configuration();
     let mux = build_initial_mux(&config, default_domain_name, default_workspace_name)?;
-    let unix_socket_path = prepare_gui_runtime_env()?;
-    spawn_mux_server(unix_socket_path, should_publish, window_class)?;
-    Ok(mux)
+    let unix_socket_path = publish_mux_runtime(window_class, should_publish)?;
+    Ok(RuntimeBootstrapResult {
+        mux,
+        unix_socket_path,
+    })
 }

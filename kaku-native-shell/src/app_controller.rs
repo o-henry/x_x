@@ -70,9 +70,10 @@ impl AppController {
     pub fn bootstrap(self: &Rc<Self>) {
         let plan = NativeShellBootstrapPlan::default();
         match bootstrap_native_shell_runtime(&plan) {
-            Ok(mux) => {
+            Ok(result) => {
                 self.runtime_online.set(true);
-                self.selected_workspace.replace(Some(mux.active_workspace()));
+                self.selected_workspace
+                    .replace(Some(result.mux.active_workspace()));
                 self.runtime_error.replace(None);
             }
             Err(err) => {
