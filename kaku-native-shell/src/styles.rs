@@ -23,7 +23,7 @@ pub fn install_css() {
         }
 
         .chrome-title {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: #f2f2f5;
         }
@@ -47,7 +47,7 @@ pub fn install_css() {
         }
 
         .rail-row {
-          padding: 8px 10px;
+          padding: 10px 14px;
           border-radius: 0;
           background: transparent;
           border: none;
@@ -90,17 +90,35 @@ pub fn install_css() {
         }
 
         .action-button {
-          background: rgba(255,255,255,0.03);
+          background: rgba(255,255,255,0.02);
           color: #cfd3df;
           border-radius: 0;
           border: 1px solid rgba(255,255,255,0.05);
-          padding: 4px 8px;
+          min-height: 30px;
+          min-width: 88px;
+          padding: 4px 10px;
           box-shadow: none;
+        }
+
+        .action-button.compact {
+          min-width: 72px;
+        }
+
+        .action-button.chrome-button {
+          min-width: 104px;
+        }
+
+        .action-button.text-only {
+          min-width: 0;
         }
 
         .list-row, .info-row {
           padding: 6px 0;
           border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .pane-content {
+          margin-top: 14px;
         }
 
         scrolledwindow scrollbar,

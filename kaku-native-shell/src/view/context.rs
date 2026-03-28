@@ -21,8 +21,9 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
     let header_actions = gtk::Box::new(Orientation::Horizontal, 8);
     header_actions.set_margin_start(12);
     header_actions.set_margin_end(12);
-    header_actions.set_margin_top(8);
-    let mark_read = action_button("mark");
+    header_actions.set_margin_top(10);
+    header_actions.set_margin_bottom(4);
+    let mark_read = action_button("Mark Read");
     header_actions.append(&mark_read);
     panel.append(&header_actions);
     let mark_read_button = Some(mark_read);
@@ -38,7 +39,7 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
     let list = gtk::Box::new(Orientation::Vertical, 6);
     list.set_margin_start(12);
     list.set_margin_end(12);
-    list.set_margin_top(6);
+    list.set_margin_top(14);
     list.set_margin_bottom(12);
     for row in unread.iter().take(8) {
         list.append(&notification_row(
@@ -71,7 +72,7 @@ pub fn build_task_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
     let list = gtk::Box::new(Orientation::Vertical, 6);
     list.set_margin_start(12);
     list.set_margin_end(12);
-    list.set_margin_top(10);
+    list.set_margin_top(14);
     list.set_margin_bottom(12);
     for row in tasks.iter().take(10) {
         let status = if row.is_failed {
@@ -109,9 +110,10 @@ pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
         .map(|row| row.value);
 
     let body = gtk::Box::new(Orientation::Vertical, 10);
+    body.add_css_class("pane-content");
     body.set_margin_start(12);
     body.set_margin_end(12);
-    body.set_margin_top(10);
+    body.set_margin_top(12);
     body.set_margin_bottom(12);
 
     body.append(&info_row("Workspace", selected));

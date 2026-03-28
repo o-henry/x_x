@@ -2625,6 +2625,9 @@ impl TermWindow {
 
 impl TermWindow {
     pub(crate) fn operator_nav_enabled(&self) -> bool {
+        if std::env::var_os("KAKU_DISABLE_OPERATOR_NAV").is_some() {
+            return false;
+        }
         self.dimensions.pixel_width >= OPERATOR_NAV_MIN_WINDOW_WIDTH
     }
 

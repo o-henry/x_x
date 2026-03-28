@@ -13,14 +13,14 @@ pub fn build_rail(snapshot: &RuntimeSnapshot) -> RailView {
     rail.add_css_class("workspace-rail");
     rail.set_margin_start(0);
     rail.set_margin_end(0);
-    rail.set_margin_top(10);
-    rail.set_margin_bottom(10);
+    rail.set_margin_top(8);
+    rail.set_margin_bottom(8);
 
     let eyebrow = gtk::Label::new(Some("WORKSPACES"));
     eyebrow.set_halign(Align::Start);
     eyebrow.add_css_class("rail-eyebrow");
-    eyebrow.set_margin_start(10);
-    eyebrow.set_margin_end(10);
+    eyebrow.set_margin_start(12);
+    eyebrow.set_margin_end(12);
     eyebrow.set_margin_bottom(6);
     rail.append(&eyebrow);
 

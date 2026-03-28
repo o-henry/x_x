@@ -1,5 +1,7 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
-use crate::view::{action_button, empty_state, pane_panel, pill, scroller, WorkspaceActionButtons};
+use crate::view::{
+    compact_action_button, empty_state, pane_panel, pill, scroller, WorkspaceActionButtons,
+};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
@@ -11,8 +13,9 @@ pub struct WorkspacePanelView {
 pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
     let panel = pane_panel("Workspace", None);
-    let body = gtk::Box::new(Orientation::Vertical, 12);
+    let body = gtk::Box::new(Orientation::Vertical, 14);
     body.add_css_class("pane-body");
+    body.add_css_class("pane-content");
     body.set_margin_start(14);
     body.set_margin_end(14);
     body.set_margin_top(14);
@@ -23,7 +26,7 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     title.add_css_class("workspace-title");
 
     let summary = gtk::Label::new(Some(&format!(
-        "{}U  {}R  {}F  {}L",
+        "{} unread  {} running  {} failed  {} logs",
         workspace.unread_count,
         workspace.running_count,
         workspace.failed_count,
@@ -47,12 +50,12 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
 
     let actions_row = gtk::Box::new(Orientation::Horizontal, 8);
     actions_row.set_halign(Align::Start);
-    let launch_terminal = action_button("open");
-    let set_status = action_button("status");
-    let clear_status = action_button("clear");
-    let set_progress = action_button("progress");
-    let clear_progress = action_button("clear");
-    let append_log = action_button("log");
+    let launch_terminal = compact_action_button("Open");
+    let set_status = compact_action_button("Status");
+    let clear_status = compact_action_button("Clear");
+    let set_progress = compact_action_button("Progress");
+    let clear_progress = compact_action_button("Reset");
+    let append_log = compact_action_button("Log");
     for button in [
         &launch_terminal,
         &set_status,
@@ -91,9 +94,10 @@ pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
     }
 
     let list = gtk::Box::new(Orientation::Vertical, 8);
+    list.add_css_class("pane-content");
     list.set_margin_start(14);
     list.set_margin_end(14);
-    list.set_margin_top(12);
+    list.set_margin_top(14);
     list.set_margin_bottom(14);
     for row in snapshot.logs.iter().rev().take(12) {
         list.append(&log_row(row.seq, &row.message));

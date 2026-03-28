@@ -1,5 +1,5 @@
 use crate::snapshot::RuntimeSnapshot;
-use crate::view::action_button;
+use crate::view::chrome_action_button;
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
@@ -15,9 +15,10 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     chrome.set_margin_start(10);
     chrome.set_margin_end(10);
     chrome.set_margin_top(6);
-    chrome.set_margin_bottom(6);
+    chrome.set_margin_bottom(2);
 
-    let title_box = gtk::Box::new(Orientation::Vertical, 2);
+    let title_box = gtk::Box::new(Orientation::Vertical, 1);
+    title_box.set_margin_top(4);
     let title = gtk::Label::new(Some("Kaku"));
     title.set_halign(Align::Start);
     title.add_css_class("chrome-title");
@@ -40,11 +41,11 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     let spacer = gtk::Box::new(Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
 
-    let active = gtk::Label::new(Some(&format!("◉ {}", snapshot.active_workspace)));
+    let active = gtk::Label::new(Some(&format!("workspace {}", snapshot.active_workspace)));
     active.add_css_class("chrome-pill");
 
-    let refresh_button = action_button("↻");
-    let terminal_button = action_button("terminal");
+    let refresh_button = chrome_action_button("Refresh");
+    let terminal_button = chrome_action_button("Open Terminal");
 
     chrome.append(&title_box);
     chrome.append(&spacer);

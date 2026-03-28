@@ -116,6 +116,11 @@ impl AppController {
         self.bind_shell_view(shell);
     }
 
+    fn defer(self: &Rc<Self>, f: impl FnOnce(Rc<Self>) + 'static) {
+        let this = Rc::clone(self);
+        glib::idle_add_local_once(move || f(this));
+    }
+
     pub fn snapshot(&self) -> RuntimeSnapshot {
         if !self.runtime_online.get() {
             return RuntimeSnapshot::default();
@@ -195,55 +200,62 @@ impl AppController {
 
         {
             let this = Rc::clone(self);
-            refresh_button.connect_clicked(move |_| this.rerender());
+            refresh_button.connect_clicked(move |_| this.defer(|controller| controller.rerender()));
         }
         {
             let this = Rc::clone(self);
-            terminal_button.connect_clicked(move |_| this.launch_terminal_window());
+            terminal_button.connect_clicked(move |_| {
+                this.defer(|controller| controller.launch_terminal_window())
+            });
         }
         for (workspace, button) in rail_buttons {
             let this = Rc::clone(self);
-            button.connect_clicked(move |_| this.select_workspace(&workspace));
+            button.connect_clicked(move |_| {
+                let workspace = workspace.clone();
+                this.defer(move |controller| controller.select_workspace(&workspace));
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .launch_terminal
-                .connect_clicked(move |_| this.launch_terminal_window());
+            workspace_actions.launch_terminal.connect_clicked(move |_| {
+                this.defer(|controller| controller.launch_terminal_window())
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .set_status
-                .connect_clicked(move |_| this.set_status_for_selected());
+            workspace_actions.set_status.connect_clicked(move |_| {
+                this.defer(|controller| controller.set_status_for_selected())
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .clear_status
-                .connect_clicked(move |_| this.clear_status_for_selected());
+            workspace_actions.clear_status.connect_clicked(move |_| {
+                this.defer(|controller| controller.clear_status_for_selected())
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .set_progress
-                .connect_clicked(move |_| this.set_progress_for_selected());
+            workspace_actions.set_progress.connect_clicked(move |_| {
+                this.defer(|controller| controller.set_progress_for_selected())
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .clear_progress
-                .connect_clicked(move |_| this.clear_progress_for_selected());
+            workspace_actions.clear_progress.connect_clicked(move |_| {
+                this.defer(|controller| controller.clear_progress_for_selected())
+            });
         }
         {
             let this = Rc::clone(self);
-            workspace_actions
-                .append_log
-                .connect_clicked(move |_| this.append_log_for_selected());
+            workspace_actions.append_log.connect_clicked(move |_| {
+                this.defer(|controller| controller.append_log_for_selected())
+            });
         }
         if let Some(mark_read_button) = inbox_mark_read_button {
             let this = Rc::clone(self);
-            mark_read_button.connect_clicked(move |_| this.mark_notifications_read_for_selected());
+            mark_read_button.connect_clicked(move |_| {
+                this.defer(|controller| controller.mark_notifications_read_for_selected())
+            });
         }
 
         self.window.set_content(Some(&root));
@@ -295,6 +307,7 @@ impl AppController {
         };
 
         match Command::new(path)
+            .env("KAKU_DISABLE_OPERATOR_NAV", "1")
             .arg("start")
             .arg("--always-new-process")
             .spawn()
@@ -323,12 +336,12 @@ impl AppController {
         }
         let mux = Mux::get();
         let context = self.action_context(mux.as_ref());
-        if matches!(
-            action.execute(mux.as_ref(), &context),
-            ShellActionOutcome::NoMutation
-        ) && matches!(action, ShellAction::Refresh)
-        {
-            self.rerender();
+        match action.execute(mux.as_ref(), &context) {
+            ShellActionOutcome::Mutated => self.rerender(),
+            ShellActionOutcome::NoMutation if matches!(action, ShellAction::Refresh) => {
+                self.rerender();
+            }
+            ShellActionOutcome::NoMutation => {}
         }
     }
 

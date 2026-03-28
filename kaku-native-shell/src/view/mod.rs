@@ -60,7 +60,7 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
     let rail_view = rail::build_rail(snapshot);
     rail_view
         .root
-        .set_size_request(168.min(layout.rail_width), -1);
+        .set_size_request(156.min(layout.rail_width), -1);
     rail_view.root.set_hexpand(false);
     rail_view.root.set_halign(Align::Start);
     rail_view.root.set_vexpand(true);
@@ -77,12 +77,12 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
     let metadata_panel = context::build_metadata_panel(snapshot);
     activity_panel.set_hexpand(true);
     activity_panel.set_vexpand(true);
-    metadata_panel.set_width_request(260);
+    metadata_panel.set_width_request(248);
     metadata_panel.set_hexpand(false);
     metadata_panel.set_vexpand(true);
 
     let lower_center = gtk::Box::new(Orientation::Horizontal, 0);
-    lower_center.set_height_request(250);
+    lower_center.set_height_request(252);
     lower_center.append(&activity_panel);
     lower_center.append(&metadata_panel);
 
@@ -90,7 +90,7 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
     center_column.append(&lower_center);
 
     let side_column = gtk::Box::new(Orientation::Vertical, 0);
-    side_column.set_size_request(240, -1);
+    side_column.set_size_request(224, -1);
     side_column.set_hexpand(false);
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
@@ -122,6 +122,18 @@ pub(crate) fn action_button(label: &str) -> gtk::Button {
     button
 }
 
+pub(crate) fn compact_action_button(label: &str) -> gtk::Button {
+    let button = action_button(label);
+    button.add_css_class("compact");
+    button
+}
+
+pub(crate) fn chrome_action_button(label: &str) -> gtk::Button {
+    let button = action_button(label);
+    button.add_css_class("chrome-button");
+    button
+}
+
 pub(crate) fn pane_panel(title: &str, subtitle: Option<&str>) -> gtk::Box {
     let panel = gtk::Box::new(Orientation::Vertical, 0);
     panel.add_css_class("pane-panel");
@@ -130,8 +142,8 @@ pub(crate) fn pane_panel(title: &str, subtitle: Option<&str>) -> gtk::Box {
     header.add_css_class("pane-header");
     header.set_margin_start(12);
     header.set_margin_end(12);
-    header.set_margin_top(8);
-    header.set_margin_bottom(8);
+    header.set_margin_top(10);
+    header.set_margin_bottom(10);
 
     let title_label = gtk::Label::new(Some(title));
     title_label.set_halign(Align::Start);
