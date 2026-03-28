@@ -11,7 +11,7 @@ use glib::value::ToValue;
 use gtk::gdk;
 use gtk::prelude::IsA;
 use gtk::prelude::*;
-use gtk::prelude::{EventControllerExt, GestureSingleExt, NativeExt, WidgetExt};
+use gtk::prelude::WidgetExt;
 use gtk::{Align, Orientation, Paned, PolicyType};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,7 +35,6 @@ pub struct ShellView {
     pub terminal_button: gtk::Button,
     pub rail_toggle_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
-    pub inbox_mark_read_button: Option<gtk::Button>,
     pub activity_header: gtk::Box,
     pub metadata_header: gtk::Box,
     pub inbox_header: gtk::Box,
@@ -215,7 +214,6 @@ pub fn build_shell(
         terminal_button: chrome_view.terminal_button,
         rail_toggle_button: rail_view.toggle_button,
         rail_buttons: rail_view.workspace_buttons,
-        inbox_mark_read_button: inbox_view.mark_read_button,
         activity_header: activity_view.header,
         metadata_header: metadata_view.header,
         inbox_header: inbox_view.header,
@@ -278,32 +276,6 @@ pub(crate) fn pane_panel(
         action_host.append(action);
         header.append(&action_host);
     }
-
-    let drag = gtk::GestureClick::new();
-    let drag_handle = header.clone();
-    drag.set_button(1);
-    drag.connect_pressed(move |gesture, _, x, y| {
-        let Some(device) = gesture.current_event_device() else {
-            return;
-        };
-        let Some(native) = drag_handle.native() else {
-            return;
-        };
-        let Some(surface) = native.surface() else {
-            return;
-        };
-        let Ok(toplevel) = surface.dynamic_cast::<gdk::Toplevel>() else {
-            return;
-        };
-        toplevel.begin_move(
-            &device,
-            gesture.current_button() as i32,
-            x,
-            y,
-            gesture.current_event_time(),
-        );
-    });
-    title_stack.add_controller(drag);
 
     panel.append(&header);
 

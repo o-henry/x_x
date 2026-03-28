@@ -1,21 +1,15 @@
 use crate::snapshot::RuntimeSnapshot;
-use crate::view::{action_button, empty_state, info_row, pane_panel, scroller};
+use crate::view::{empty_state, info_row, pane_panel, scroller};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
 pub struct InboxPanelView {
     pub root: gtk::Box,
     pub header: gtk::Box,
-    pub mark_read_button: Option<gtk::Button>,
 }
 
 pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
-    let mark_read = action_button("Mark Read");
-    mark_read.add_css_class("subtle");
-    mark_read.add_css_class("text-only");
-    let header_actions = gtk::Box::new(Orientation::Horizontal, 8);
-    header_actions.append(&mark_read);
-    let frame = pane_panel("Inbox", None, Some(&header_actions));
+    let frame = pane_panel("Inbox", None, Option::<&gtk::Widget>::None);
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
         .notifications
@@ -31,7 +25,6 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
         return InboxPanelView {
             root: frame.root,
             header: frame.header,
-            mark_read_button: Some(mark_read.clone()),
         };
     }
 
@@ -50,7 +43,6 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
     InboxPanelView {
         root: frame.root,
         header: frame.header,
-        mark_read_button: Some(mark_read),
     }
 }
 

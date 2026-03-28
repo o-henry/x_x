@@ -224,7 +224,6 @@ impl AppController {
             terminal_button,
             rail_toggle_button,
             rail_buttons,
-            inbox_mark_read_button,
             activity_header,
             metadata_header,
             inbox_header,
@@ -276,12 +275,6 @@ impl AppController {
             button.connect_clicked(move |_| {
                 let workspace = workspace.clone();
                 this.defer(move |controller| controller.select_workspace(&workspace));
-            });
-        }
-        if let Some(mark_read_button) = inbox_mark_read_button {
-            let this = Rc::clone(self);
-            mark_read_button.connect_clicked(move |_| {
-                this.defer(|controller| controller.mark_notifications_read_for_selected())
             });
         }
         {
@@ -401,13 +394,6 @@ impl AppController {
 
     fn append_log_for_selected(self: &Rc<Self>) {
         self.apply_action(ShellAction::AppendLog);
-    }
-
-    fn mark_notifications_read_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        self.apply_action(ShellAction::MarkVisibleRead);
     }
 
     fn toggle_terminal_sessions(self: &Rc<Self>) {

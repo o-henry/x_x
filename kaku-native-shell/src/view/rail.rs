@@ -48,42 +48,78 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
         row.set_halign(Align::Fill);
         row.set_hexpand(true);
         row.add_css_class("rail-row");
+        if collapsed {
+            row.add_css_class("collapsed");
+        }
         if summary.name == snapshot.active_workspace {
             row.add_css_class("active");
         }
 
-        let outer = gtk::Box::new(Orientation::Horizontal, 8);
+        let outer = gtk::Box::new(
+            if collapsed {
+                Orientation::Vertical
+            } else {
+                Orientation::Horizontal
+            },
+            if collapsed { 2 } else { 8 },
+        );
         outer.set_hexpand(true);
+        outer.set_halign(if collapsed {
+            Align::Center
+        } else {
+            Align::Fill
+        });
 
         let name_box = gtk::Box::new(Orientation::Vertical, 2);
-        name_box.set_hexpand(true);
+        name_box.set_hexpand(!collapsed);
+        name_box.set_halign(if collapsed {
+            Align::Center
+        } else {
+            Align::Fill
+        });
 
-        let name = gtk::Label::new(Some(&summary.name));
-        name.set_halign(Align::Start);
+        let collapsed_name = summary
+            .name
+            .chars()
+            .next()
+            .map(|c| c.to_ascii_uppercase().to_string())
+            .unwrap_or_else(|| "•".to_string());
+        let name = gtk::Label::new(Some(if collapsed {
+            &collapsed_name
+        } else {
+            &summary.name
+        }));
+        name.set_halign(if collapsed {
+            Align::Center
+        } else {
+            Align::Start
+        });
         name.add_css_class("rail-name");
-        if collapsed {
-            name.set_visible(false);
-        }
 
         let meta = gtk::Label::new(Some(&workspace_badge_text(
             summary.unread_count,
             summary.running_count,
             summary.failed_count,
         )));
-        meta.set_halign(Align::Start);
+        meta.set_halign(if collapsed {
+            Align::Center
+        } else {
+            Align::Start
+        });
         meta.add_css_class("rail-meta");
         if collapsed {
-            meta.set_visible(false);
+            meta.set_label(&collapsed_badge_text(
+                summary.unread_count,
+                summary.running_count,
+                summary.failed_count,
+                summary.log_count,
+            ));
         }
         name_box.append(&name);
         name_box.append(&meta);
 
         let trailing_text = if collapsed {
-            workspace_badge_text(
-                summary.unread_count,
-                summary.running_count,
-                summary.failed_count,
-            )
+            String::new()
         } else {
             workspace_status_tokens(
                 summary.status.as_deref(),
@@ -96,11 +132,13 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
         trailing.set_halign(Align::End);
         trailing.add_css_class("rail-trailing");
         if collapsed {
-            trailing.set_halign(Align::Center);
+            trailing.set_visible(false);
         }
 
         outer.append(&name_box);
-        outer.append(&trailing);
+        if !collapsed {
+            outer.append(&trailing);
+        }
         row.set_child(Some(&outer));
 
         workspace_buttons.push((summary.name.clone(), row.clone()));
@@ -128,4 +166,13 @@ pub fn workspace_badge_text(
     failed_count: usize,
 ) -> String {
     format!("{unread_count}U {running_count}R {failed_count}F")
+}
+
+fn collapsed_badge_text(
+    unread_count: usize,
+    running_count: usize,
+    failed_count: usize,
+    log_count: usize,
+) -> String {
+    format!("{unread_count}U {running_count}R {failed_count}F {log_count}L")
 }

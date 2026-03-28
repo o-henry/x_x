@@ -69,6 +69,10 @@ pub fn install_css() {
           border-left-color: transparent;
         }
 
+        .rail-row.collapsed {
+          padding: 10px 6px;
+        }
+
         .rail-name, .pane-title, .row-title, .workspace-title, .info-value {
           font-size: 12px;
           font-weight: 600;
