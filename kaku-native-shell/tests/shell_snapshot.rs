@@ -40,15 +40,29 @@ fn shell_layout_contract() {
 
     let contract = shell_ui_contract();
     assert_eq!(contract.primary_surface, "workspace");
-    assert_eq!(contract.persistent_context_slots, ["inbox", "tasks", "metadata"]);
+    assert_eq!(
+        contract.persistent_context_slots,
+        ["inbox", "tasks", "metadata"]
+    );
     assert!(contract.layout_slots.contains(&"chrome"));
     assert!(contract.layout_slots.contains(&"rail"));
     assert!(contract.layout_slots.contains(&"activity"));
     assert_eq!(
         shell_slot_order(),
-        ["chrome", "rail", "workspace", "activity", "metadata", "inbox", "tasks"]
+        [
+            "chrome",
+            "rail",
+            "workspace",
+            "activity",
+            "metadata",
+            "inbox",
+            "tasks"
+        ]
     );
-    assert_eq!(context_panel_titles(), ["Inbox", "Tasks", "Activity", "Metadata"]);
+    assert_eq!(
+        context_panel_titles(),
+        ["Inbox", "Tasks", "Activity", "Metadata"]
+    );
 }
 
 #[test]
@@ -62,14 +76,8 @@ fn shell_typography_contract() {
         .typography
         .operator_classes
         .contains(&"chrome-title"));
-    assert!(contract
-        .typography
-        .operator_classes
-        .contains(&"rail-name"));
-    assert!(contract
-        .typography
-        .operator_classes
-        .contains(&"pane-title"));
+    assert!(contract.typography.operator_classes.contains(&"rail-name"));
+    assert!(contract.typography.operator_classes.contains(&"pane-title"));
 }
 
 #[test]
@@ -85,16 +93,16 @@ fn shell_affordance_contract() {
         .header_badges
         .iter()
         .all(|label| label.chars().any(|ch| !ch.is_ascii_alphanumeric())));
-    assert!(contract
-        .affordances
-        .action_labels
-        .contains(&"↻"));
+    assert!(contract.affordances.action_labels.contains(&"↻"));
     assert!(contract
         .affordances
         .action_labels
         .contains(&"⌂ open terminal"));
     assert_eq!(workspace_badge_text(1, 2, 0), "1U 2R 0F");
-    assert_eq!(workspace_status_tokens(Some("Building"), Some(70), 5), ["◉ Building", "◔ 70%", "✦ 5L"]);
+    assert_eq!(
+        workspace_status_tokens(Some("Building"), Some(70), 5),
+        ["◉ Building", "◔ 70%", "✦ 5L"]
+    );
 }
 
 #[derive(Clone, Default)]

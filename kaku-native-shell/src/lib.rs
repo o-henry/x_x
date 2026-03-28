@@ -2,9 +2,12 @@ pub mod actions;
 pub mod app_controller;
 pub mod runtime_bridge;
 pub mod snapshot;
+pub mod styles;
+pub mod view;
 
 use adw::prelude::*;
-use app_controller::{install_css, AppController};
+use app_controller::AppController;
+use styles::install_css;
 
 pub const APP_ID: &str = "fun.tw93.kaku.NativeShell";
 
