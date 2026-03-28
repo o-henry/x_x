@@ -34,7 +34,7 @@ pub struct ShellLayoutContract {
 impl Default for ShellLayoutContract {
     fn default() -> Self {
         Self {
-            chrome_height: 40,
+            chrome_height: 32,
             rail_width: 160,
         }
     }

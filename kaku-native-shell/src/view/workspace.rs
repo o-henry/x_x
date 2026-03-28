@@ -57,7 +57,6 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let clear_progress = compact_action_button("Reset");
     let append_log = compact_action_button("Log");
     for button in [
-        &launch_terminal,
         &set_status,
         &clear_status,
         &set_progress,

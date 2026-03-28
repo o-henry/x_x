@@ -10,15 +10,15 @@ pub struct ChromeView {
 }
 
 pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
-    let chrome = gtk::Box::new(Orientation::Horizontal, 10);
+    let chrome = gtk::Box::new(Orientation::Horizontal, 8);
     chrome.add_css_class("shell-chrome");
     chrome.set_margin_start(10);
     chrome.set_margin_end(10);
-    chrome.set_margin_top(6);
-    chrome.set_margin_bottom(2);
+    chrome.set_margin_top(2);
+    chrome.set_margin_bottom(0);
 
     let title_box = gtk::Box::new(Orientation::Vertical, 1);
-    title_box.set_margin_top(4);
+    title_box.set_margin_top(5);
     let title = gtk::Label::new(Some("Kaku"));
     title.set_halign(Align::Start);
     title.add_css_class("chrome-title");
@@ -41,7 +41,7 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     let spacer = gtk::Box::new(Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
 
-    let active = gtk::Label::new(Some(&format!("workspace {}", snapshot.active_workspace)));
+    let active = gtk::Label::new(Some(&snapshot.active_workspace));
     active.add_css_class("chrome-pill");
 
     let refresh_button = chrome_action_button("Refresh");
@@ -50,8 +50,6 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     chrome.append(&title_box);
     chrome.append(&spacer);
     chrome.append(&active);
-    chrome.append(&refresh_button);
-    chrome.append(&terminal_button);
 
     ChromeView {
         root: chrome,
