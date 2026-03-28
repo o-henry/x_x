@@ -187,7 +187,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     inbox_region.add_css_class("rail-inbox-region");
     inbox_region.set_vexpand(true);
     inbox_region.set_visible(!inbox_collapsed);
-    inbox_region.set_margin_bottom(8);
+    inbox_region.set_margin_bottom(16);
 
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
@@ -212,7 +212,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
         list.set_margin_start(14);
         list.set_margin_end(14);
         list.set_margin_top(8);
-        list.set_margin_bottom(6);
+        list.set_margin_bottom(14);
         for row in unread {
             let outer = gtk::Box::new(Orientation::Vertical, 4);
             outer.add_css_class("list-row");

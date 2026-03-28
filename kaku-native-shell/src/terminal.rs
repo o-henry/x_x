@@ -3,6 +3,7 @@ use gtk::prelude::*;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::cell::RefCell;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -52,9 +53,17 @@ pub fn build_terminal_widget(cwd: Option<String>) -> gtk::Box {
     };
 
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let mut cmd = CommandBuilder::new(shell);
-    cmd.env("TERM", "dumb");
+    let mut cmd = CommandBuilder::new(&shell);
+    configure_shell_command(&shell, &mut cmd);
+    cmd.env("TERM", "xterm-256color");
     cmd.env("NO_COLOR", "1");
+    cmd.env("CLICOLOR", "0");
+    cmd.env("CLICOLOR_FORCE", "0");
+    cmd.env("STARSHIP_CONFIG", "/dev/null");
+    cmd.env("STARSHIP_SHELL", "disabled");
+    cmd.env("PROMPT", "%~ %# ");
+    cmd.env("RPROMPT", "");
+    cmd.env("PS1", "\\w $ ");
     if let Some(dir) = cwd.and_then(normalize_cwd) {
         cmd.cwd(dir);
     }
@@ -107,8 +116,11 @@ pub fn build_terminal_widget(cwd: Option<String>) -> gtk::Box {
     glib::timeout_add_local(Duration::from_millis(16), move || {
         let mut changed = false;
         while let Ok(bytes) = rx.try_recv() {
-            append_output(&buffer_for_output, &String::from_utf8_lossy(&bytes));
-            changed = true;
+            let text = sanitize_terminal_output(&bytes);
+            if !text.is_empty() {
+                append_output(&buffer_for_output, &text);
+                changed = true;
+            }
         }
         if changed {
             let mut end = buffer_for_output.end_iter();
@@ -170,6 +182,99 @@ fn error_label(message: &str) -> gtk::Label {
     label.set_margin_top(14);
     label.add_css_class("empty-state");
     label
+}
+
+fn configure_shell_command(shell: &str, cmd: &mut CommandBuilder) {
+    let shell_name = Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    match shell_name {
+        "zsh" => {
+            cmd.arg("-f");
+        }
+        "bash" => {
+            cmd.arg("--noprofile");
+            cmd.arg("--norc");
+        }
+        "fish" => {
+            cmd.arg("--no-config");
+        }
+        _ => {}
+    }
+}
+
+fn sanitize_terminal_output(bytes: &[u8]) -> String {
+    let input = String::from_utf8_lossy(bytes);
+    strip_ansi_sequences(&normalize_carriage_returns(&input))
+}
+
+fn normalize_carriage_returns(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\r' {
+            if matches!(chars.peek(), Some('\n')) {
+                continue;
+            }
+            output.push('\n');
+        } else {
+            output.push(ch);
+        }
+    }
+    output
+}
+
+fn strip_ansi_sequences(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut output = String::with_capacity(input.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1b {
+            if i + 1 >= bytes.len() {
+                break;
+            }
+            match bytes[i + 1] {
+                b'[' => {
+                    i += 2;
+                    while i < bytes.len() {
+                        let b = bytes[i];
+                        i += 1;
+                        if (0x40..=0x7e).contains(&b) {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                b']' => {
+                    i += 2;
+                    while i < bytes.len() {
+                        if bytes[i] == 0x07 {
+                            i += 1;
+                            break;
+                        }
+                        if i + 1 < bytes.len() && bytes[i] == 0x1b && bytes[i + 1] == b'\\' {
+                            i += 2;
+                            break;
+                        }
+                        i += 1;
+                    }
+                    continue;
+                }
+                _ => {
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+        if let Some(ch) = input[i..].chars().next() {
+            output.push(ch);
+            i += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    output
 }
 
 fn normalize_cwd(cwd: String) -> Option<PathBuf> {

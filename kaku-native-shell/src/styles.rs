@@ -89,6 +89,7 @@ pub fn install_css() {
 
         .rail-inbox-region {
           border-top: 1px solid rgba(255,255,255,0.03);
+          padding-bottom: 12px;
         }
 
         .side-column > box {
@@ -300,6 +301,10 @@ pub fn install_css() {
           caret-color: #f4f6fb;
           font-family: 'DM Mono', monospace;
           font-size: 12px;
+        }
+
+        .terminal-view text {
+          background: #0d0f14;
         }
 
         .shortcut-combo {
