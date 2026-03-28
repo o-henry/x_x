@@ -167,6 +167,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     inbox_header.add_css_class("rail-inbox-header");
     inbox_header.set_halign(Align::Fill);
     inbox_header.set_hexpand(true);
+    inbox_header.set_margin_bottom(if inbox_collapsed { 12 } else { 0 });
 
     let inbox_label = gtk::Label::new(Some("INBOX"));
     inbox_label.set_halign(Align::Start);

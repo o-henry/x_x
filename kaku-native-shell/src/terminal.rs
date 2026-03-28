@@ -19,7 +19,7 @@ pub fn build_terminal_widget(cwd: Option<String>) -> gtk::Box {
         .hexpand(true)
         .vexpand(true)
         .hscrollbar_policy(gtk::PolicyType::Never)
-        .vscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
         .has_frame(false)
         .build();
 
