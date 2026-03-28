@@ -125,8 +125,19 @@ pub fn install_css() {
           background: #191c23;
         }
 
+        .pane-panel.drag-source {
+          opacity: 0.78;
+        }
+
+        .pane-panel.drop-target {
+          border-color: rgba(122,161,255,0.38);
+          box-shadow: inset 0 0 0 1px rgba(122,161,255,0.16);
+        }
+
         .pane-titlebar.drop-target,
-        .pane-surface.drop-target {
+        .pane-surface.drop-target,
+        .pane-panel.drop-target .pane-titlebar,
+        .pane-panel.drop-target .pane-surface {
           background: #202733;
           border-color: rgba(122,161,255,0.28);
         }

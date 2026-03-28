@@ -224,6 +224,10 @@ impl AppController {
             refresh_button,
             terminal_button,
             rail_buttons,
+            activity_root,
+            metadata_root,
+            inbox_root,
+            tasks_root,
             activity_panel,
             metadata_panel,
             inbox_panel,
@@ -280,8 +284,10 @@ impl AppController {
             let this = Rc::clone(self);
             bind_header_swap(
                 &activity_header,
+                &activity_root,
                 &metadata_header,
                 &metadata_panel,
+                &metadata_root,
                 "lower-swap",
                 move || this.defer(|controller| controller.toggle_lower_panes()),
             );
@@ -290,8 +296,10 @@ impl AppController {
             let this = Rc::clone(self);
             bind_header_swap(
                 &metadata_header,
+                &metadata_root,
                 &activity_header,
                 &activity_panel,
+                &activity_root,
                 "lower-swap",
                 move || this.defer(|controller| controller.toggle_lower_panes()),
             );
@@ -300,8 +308,10 @@ impl AppController {
             let this = Rc::clone(self);
             bind_header_swap(
                 &inbox_header,
+                &inbox_root,
                 &tasks_header,
                 &tasks_panel,
+                &tasks_root,
                 "side-swap",
                 move || this.defer(|controller| controller.toggle_side_panes()),
             );
@@ -310,8 +320,10 @@ impl AppController {
             let this = Rc::clone(self);
             bind_header_swap(
                 &tasks_header,
+                &tasks_root,
                 &inbox_header,
                 &inbox_panel,
+                &inbox_root,
                 "side-swap",
                 move || this.defer(|controller| controller.toggle_side_panes()),
             );

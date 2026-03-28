@@ -35,6 +35,10 @@ pub struct ShellView {
     pub refresh_button: gtk::Button,
     pub terminal_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
+    pub activity_root: gtk::Box,
+    pub metadata_root: gtk::Box,
+    pub inbox_root: gtk::Box,
+    pub tasks_root: gtk::Box,
     pub activity_panel: gtk::Box,
     pub metadata_panel: gtk::Box,
     pub inbox_panel: gtk::Box,
@@ -231,6 +235,10 @@ pub fn build_shell(
         refresh_button: chrome_view.refresh_button,
         terminal_button: chrome_view.terminal_button,
         rail_buttons: rail_view.workspace_buttons,
+        activity_root: activity_view.root.clone(),
+        metadata_root: metadata_view.root.clone(),
+        inbox_root: inbox_view.root.clone(),
+        tasks_root: task_view.root.clone(),
         activity_panel: activity_view.root.clone(),
         metadata_panel: metadata_view.root.clone(),
         inbox_panel: inbox_view.root.clone(),
@@ -336,8 +344,10 @@ pub(crate) fn scroller(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
 
 pub(crate) fn bind_header_swap(
     source: &gtk::Box,
+    source_panel: &gtk::Box,
     target_header: &gtk::Box,
     target_body: &gtk::Box,
+    target_panel: &gtk::Box,
     tag: &'static str,
     on_drop: impl Fn() + 'static,
 ) {
@@ -345,6 +355,14 @@ pub(crate) fn bind_header_swap(
     let drag_source = gtk::DragSource::builder()
         .actions(gdk::DragAction::MOVE)
         .build();
+    let source_panel_begin = source_panel.clone();
+    drag_source.connect_drag_begin(move |_, _| {
+        source_panel_begin.add_css_class("drag-source");
+    });
+    let source_panel_end = source_panel.clone();
+    drag_source.connect_drag_end(move |_, _, _| {
+        source_panel_end.remove_css_class("drag-source");
+    });
     drag_source
         .connect_prepare(move |_, _, _| Some(gdk::ContentProvider::for_value(&tag.to_value())));
     source.add_controller(drag_source);
@@ -352,23 +370,29 @@ pub(crate) fn bind_header_swap(
     let drop_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
     let target_header_enter = target_header.clone();
     let target_body_enter = target_body.clone();
+    let target_panel_enter = target_panel.clone();
     drop_target.connect_enter(move |_, _, _| {
         target_header_enter.add_css_class("drop-target");
         target_body_enter.add_css_class("drop-target");
+        target_panel_enter.add_css_class("drop-target");
         gdk::DragAction::MOVE
     });
     let target_header_leave = target_header.clone();
     let target_body_leave = target_body.clone();
+    let target_panel_leave = target_panel.clone();
     drop_target.connect_leave(move |_| {
         target_header_leave.remove_css_class("drop-target");
         target_body_leave.remove_css_class("drop-target");
+        target_panel_leave.remove_css_class("drop-target");
     });
     let target_header_drop = target_header.clone();
     let target_body_drop = target_body.clone();
+    let target_panel_drop = target_panel.clone();
     let on_drop_header = Rc::clone(&on_drop);
     drop_target.connect_drop(move |_, value, _, _| {
         target_header_drop.remove_css_class("drop-target");
         target_body_drop.remove_css_class("drop-target");
+        target_panel_drop.remove_css_class("drop-target");
         let Ok(payload) = value.get::<String>() else {
             return false;
         };
@@ -378,34 +402,7 @@ pub(crate) fn bind_header_swap(
         }
         false
     });
-    target_header.add_controller(drop_target);
-
-    let body_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
-    let body_header_enter = target_header.clone();
-    let body_target_enter = target_body.clone();
-    body_target.connect_enter(move |_, _, _| {
-        body_header_enter.add_css_class("drop-target");
-        body_target_enter.add_css_class("drop-target");
-        gdk::DragAction::MOVE
-    });
-    let body_header_leave = target_header.clone();
-    let body_target_leave = target_body.clone();
-    body_target.connect_leave(move |_| {
-        body_header_leave.remove_css_class("drop-target");
-        body_target_leave.remove_css_class("drop-target");
-    });
-    let on_drop_body = Rc::clone(&on_drop);
-    body_target.connect_drop(move |_, value, _, _| {
-        let Ok(payload) = value.get::<String>() else {
-            return false;
-        };
-        if payload == tag {
-            on_drop_body();
-            return true;
-        }
-        false
-    });
-    target_body.add_controller(body_target);
+    target_panel.add_controller(drop_target);
 }
 
 pub(crate) fn pill(label: &str) -> gtk::Label {
