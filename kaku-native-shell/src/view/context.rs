@@ -103,10 +103,29 @@ pub fn build_task_panel(snapshot: &RuntimeSnapshot) -> TaskPanelView {
 pub struct MetadataPanelView {
     pub root: gtk::Box,
     pub header: gtk::Box,
+    pub toggle_button: gtk::Button,
 }
 
-pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> MetadataPanelView {
-    let frame = pane_panel("Metadata", None, Option::<&gtk::Widget>::None);
+pub fn build_metadata_panel(snapshot: &RuntimeSnapshot, collapsed: bool) -> MetadataPanelView {
+    let toggle_button = gtk::Button::new();
+    toggle_button.add_css_class("rail-toggle-button");
+    let icon_path = if collapsed {
+        format!(
+            "{}/assets/icons/inbox-toggle-up.svg",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    } else {
+        format!(
+            "{}/assets/icons/inbox-toggle-down.svg",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    };
+    let toggle_icon = gtk::Image::from_file(icon_path);
+    toggle_icon.set_pixel_size(11);
+    toggle_button.set_child(Some(&toggle_icon));
+
+    let frame = pane_panel("Metadata", None, Some(&toggle_button));
+    frame.root.set_margin_bottom(if collapsed { 12 } else { 0 });
     let selected = snapshot.active_workspace.as_str();
     let status = snapshot
         .statuses
@@ -152,10 +171,12 @@ pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> MetadataPanelView {
             .count()
             .to_string(),
     ));
+    body.set_visible(!collapsed);
     frame.body.append(&body);
     MetadataPanelView {
         root: frame.root,
         header: frame.header,
+        toggle_button,
     }
 }
 

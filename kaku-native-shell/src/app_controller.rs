@@ -70,6 +70,7 @@ pub struct AppController {
     selected_workspace: RefCell<Option<String>>,
     rail_collapsed: Cell<bool>,
     inbox_collapsed: Cell<bool>,
+    metadata_collapsed: Cell<bool>,
     metadata_first: Cell<bool>,
     tasks_first: Cell<bool>,
     show_metadata: Cell<bool>,
@@ -94,6 +95,7 @@ impl AppController {
             selected_workspace: RefCell::new(None),
             rail_collapsed: Cell::new(false),
             inbox_collapsed: Cell::new(false),
+            metadata_collapsed: Cell::new(false),
             metadata_first: Cell::new(false),
             tasks_first: Cell::new(false),
             show_metadata: Cell::new(false),
@@ -139,6 +141,7 @@ impl AppController {
                 metadata_first: self.metadata_first.get(),
                 tasks_first: self.tasks_first.get(),
                 show_metadata: self.show_metadata.get(),
+                metadata_collapsed: self.metadata_collapsed.get(),
                 show_terminal_sessions: self.show_terminal_sessions.get(),
                 inbox_collapsed: self.inbox_collapsed.get(),
             },
@@ -227,15 +230,16 @@ impl AppController {
             terminal_button,
             rail_buttons,
             rail_inbox_toggle_button,
-            activity_root,
+            metadata_toggle_button,
+            activity_root: _,
             metadata_root,
-            activity_panel,
+            activity_panel: _,
             metadata_panel,
-            activity_header,
+            activity_header: _,
             metadata_header,
-            tasks_root: _,
-            tasks_panel: _,
-            tasks_header: _,
+            tasks_root,
+            tasks_panel,
+            tasks_header,
         } = shell;
 
         {
@@ -287,15 +291,21 @@ impl AppController {
         }
         {
             let this = Rc::clone(self);
+            metadata_toggle_button.connect_clicked(move |_| {
+                this.defer(|controller| controller.toggle_metadata_body())
+            });
+        }
+        {
+            let this = Rc::clone(self);
             if this.show_metadata.get() {
                 bind_header_swap(
-                    &activity_header,
-                    &activity_root,
+                    &tasks_header,
+                    &tasks_root,
                     &metadata_header,
                     &metadata_panel,
                     &metadata_root,
-                    "lower-swap",
-                    move || this.defer(|controller| controller.toggle_lower_panes()),
+                    "side-swap",
+                    move || this.defer(|controller| controller.toggle_side_panes()),
                 );
             }
         }
@@ -304,11 +314,11 @@ impl AppController {
             bind_header_swap(
                 &metadata_header,
                 &metadata_root,
-                &activity_header,
-                &activity_panel,
-                &activity_root,
-                "lower-swap",
-                move || this.defer(|controller| controller.toggle_lower_panes()),
+                &tasks_header,
+                &tasks_panel,
+                &tasks_root,
+                "side-swap",
+                move || this.defer(|controller| controller.toggle_side_panes()),
             );
         }
 
@@ -335,8 +345,13 @@ impl AppController {
         self.rerender();
     }
 
-    fn toggle_lower_panes(self: &Rc<Self>) {
-        self.metadata_first.set(!self.metadata_first.get());
+    fn toggle_side_panes(self: &Rc<Self>) {
+        self.tasks_first.set(!self.tasks_first.get());
+        self.rerender();
+    }
+
+    fn toggle_metadata_body(self: &Rc<Self>) {
+        self.metadata_collapsed.set(!self.metadata_collapsed.get());
         self.rerender();
     }
 
@@ -419,6 +434,9 @@ impl AppController {
 
     fn toggle_metadata(self: &Rc<Self>) {
         self.show_metadata.set(!self.show_metadata.get());
+        if self.show_metadata.get() {
+            self.metadata_collapsed.set(false);
+        }
         self.rerender();
     }
 
