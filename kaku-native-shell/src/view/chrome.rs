@@ -20,7 +20,7 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     let spacer = gtk::Box::new(Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
 
-    let active = gtk::Label::new(Some(&snapshot.active_workspace));
+    let active = gtk::Label::new(Some(&active_context_label(snapshot)));
     active.add_css_class("chrome-pill");
 
     let refresh_button = chrome_action_button("Refresh");
@@ -34,4 +34,27 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
         refresh_button,
         terminal_button,
     }
+}
+
+fn active_context_label(snapshot: &RuntimeSnapshot) -> String {
+    snapshot
+        .task_panes
+        .iter()
+        .find(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
+        .and_then(|row| row.current_working_dir.as_ref())
+        .map(|cwd| shorten_cwd(cwd))
+        .unwrap_or_else(|| snapshot.active_workspace.clone())
+}
+
+fn shorten_cwd(cwd: &str) -> String {
+    let without_scheme = cwd.strip_prefix("file://").unwrap_or(cwd);
+    let mut parts = without_scheme
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() <= 2 {
+        return without_scheme.to_string();
+    }
+    let tail = parts.split_off(parts.len() - 2);
+    format!("…/{}/{}", tail[0], tail[1])
 }

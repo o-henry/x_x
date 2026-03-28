@@ -18,13 +18,13 @@ pub fn install_css() {
         }
 
         .shell-split separator {
-          background: rgba(255,255,255,0.05);
+          background: rgba(255,255,255,0.025);
           min-width: 1px;
           min-height: 1px;
         }
 
         .shell-split separator:hover {
-          background: rgba(122,161,255,0.32);
+          background: rgba(122,161,255,0.12);
         }
 
         .shell-chrome {
@@ -104,6 +104,10 @@ pub fn install_css() {
           background: #171920;
           border-bottom: 1px solid rgba(255,255,255,0.06);
           min-height: 36px;
+        }
+
+        .pane-titlebar:hover {
+          background: #191c23;
         }
 
         .pane-header {

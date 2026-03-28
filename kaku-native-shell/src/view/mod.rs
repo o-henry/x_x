@@ -7,8 +7,10 @@ pub use rail::workspace_badge_text;
 pub use workspace::workspace_status_tokens;
 
 use crate::snapshot::{RuntimeSnapshot, ShellLayoutContract};
+use gtk::gdk;
 use gtk::prelude::IsA;
 use gtk::prelude::*;
+use gtk::prelude::{EventControllerExt, GestureSingleExt, NativeExt, WidgetExt};
 use gtk::{Align, Orientation, Paned, PolicyType};
 
 pub struct PaneFrame {
@@ -77,6 +79,8 @@ pub fn build_shell(
     center_column.set_wide_handle(true);
     center_column.set_hexpand(true);
     center_column.set_vexpand(true);
+    center_column.set_shrink_start_child(false);
+    center_column.set_shrink_end_child(false);
     center_column.set_position(layout.workspace_split);
 
     let workspace_view = workspace::build_workspace_panel(snapshot);
@@ -86,14 +90,14 @@ pub fn build_shell(
     let metadata_panel = context::build_metadata_panel(snapshot);
     activity_panel.set_hexpand(true);
     activity_panel.set_vexpand(true);
-    metadata_panel.set_width_request(248);
-    metadata_panel.set_hexpand(false);
+    metadata_panel.set_hexpand(true);
     metadata_panel.set_vexpand(true);
 
     let lower_center = gtk::Paned::new(Orientation::Horizontal);
     lower_center.add_css_class("shell-split");
     lower_center.set_wide_handle(true);
-    lower_center.set_height_request(252);
+    lower_center.set_shrink_start_child(false);
+    lower_center.set_shrink_end_child(false);
     lower_center.set_position(layout.lower_split);
     lower_center.set_start_child(Some(&activity_panel));
     lower_center.set_end_child(Some(&metadata_panel));
@@ -104,8 +108,9 @@ pub fn build_shell(
     let side_column = gtk::Paned::new(Orientation::Vertical);
     side_column.add_css_class("shell-split");
     side_column.set_wide_handle(true);
-    side_column.set_size_request(224, -1);
-    side_column.set_hexpand(false);
+    side_column.set_shrink_start_child(false);
+    side_column.set_shrink_end_child(false);
+    side_column.set_hexpand(true);
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
     side_column.set_position(layout.side_split);
@@ -121,6 +126,8 @@ pub fn build_shell(
     body_split.set_wide_handle(true);
     body_split.set_hexpand(true);
     body_split.set_vexpand(true);
+    body_split.set_shrink_start_child(false);
+    body_split.set_shrink_end_child(false);
     body_split.set_position(layout.body_split);
     body_split.set_start_child(Some(&center_column));
     body_split.set_end_child(Some(&side_column));
@@ -195,6 +202,32 @@ pub(crate) fn pane_panel(
         action_host.append(action);
         header.append(&action_host);
     }
+
+    let drag = gtk::GestureClick::new();
+    let drag_handle = header.clone();
+    drag.set_button(1);
+    drag.connect_pressed(move |gesture, _, x, y| {
+        let Some(device) = gesture.current_event_device() else {
+            return;
+        };
+        let Some(native) = drag_handle.native() else {
+            return;
+        };
+        let Some(surface) = native.surface() else {
+            return;
+        };
+        let Ok(toplevel) = surface.dynamic_cast::<gdk::Toplevel>() else {
+            return;
+        };
+        toplevel.begin_move(
+            &device,
+            gesture.current_button() as i32,
+            x,
+            y,
+            gesture.current_event_time(),
+        );
+    });
+    header.add_controller(drag);
 
     panel.append(&header);
 
