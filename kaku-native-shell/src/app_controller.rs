@@ -13,8 +13,6 @@ use gtk::prelude::{EventControllerExt, GestureSingleExt, NativeExt, WidgetExt};
 use gtk::GestureClick;
 use mux::Mux;
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
-use std::process::Command;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -77,6 +75,7 @@ pub struct AppController {
     rail_collapsed: Cell<bool>,
     metadata_first: Cell<bool>,
     tasks_first: Cell<bool>,
+    show_terminal_sessions: Cell<bool>,
     pending_refresh_scopes: Arc<Mutex<Vec<SnapshotRefreshScope>>>,
     runtime_error: RefCell<Option<String>>,
     runtime_online: Cell<bool>,
@@ -98,6 +97,7 @@ impl AppController {
             rail_collapsed: Cell::new(false),
             metadata_first: Cell::new(false),
             tasks_first: Cell::new(false),
+            show_terminal_sessions: Cell::new(false),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),
@@ -138,6 +138,7 @@ impl AppController {
                 compact,
                 metadata_first: self.metadata_first.get(),
                 tasks_first: self.tasks_first.get(),
+                show_terminal_sessions: self.show_terminal_sessions.get(),
             },
         );
         self.bind_shell_view(shell);
@@ -262,7 +263,7 @@ impl AppController {
         {
             let this = Rc::clone(self);
             terminal_button.connect_clicked(move |_| {
-                this.defer(|controller| controller.launch_terminal_window())
+                this.defer(|controller| controller.toggle_terminal_sessions())
             });
         }
         {
@@ -345,7 +346,7 @@ impl AppController {
     fn install_window_actions(self: &Rc<Self>, app: &adw::Application) {
         self.install_action("launch-terminal", {
             let this = Rc::clone(self);
-            move || this.launch_terminal_window()
+            move || this.toggle_terminal_sessions()
         });
         self.install_action("set-status", {
             let this = Rc::clone(self);
@@ -409,28 +410,10 @@ impl AppController {
         self.apply_action(ShellAction::MarkVisibleRead);
     }
 
-    fn launch_terminal_window(self: &Rc<Self>) {
-        let Some(path) = sibling_binary("kaku-gui") else {
-            self.runtime_error
-                .replace(Some("unable to locate sibling kaku-gui binary".to_string()));
-            self.rerender();
-            return;
-        };
-
-        match Command::new(path)
-            .env("KAKU_DISABLE_OPERATOR_NAV", "1")
-            .arg("start")
-            .arg("--always-new-process")
-            .spawn()
-        {
-            Ok(_) => {
-                self.runtime_error.replace(None);
-            }
-            Err(err) => {
-                self.runtime_error
-                    .replace(Some(format!("failed to launch terminal window: {err}")));
-            }
-        }
+    fn toggle_terminal_sessions(self: &Rc<Self>) {
+        self.show_terminal_sessions
+            .set(!self.show_terminal_sessions.get());
+        self.runtime_error.replace(None);
         self.rerender();
     }
 
@@ -502,9 +485,4 @@ impl AppController {
             unix_timestamp_secs,
         }
     }
-}
-
-fn sibling_binary(name: &str) -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    Some(exe.with_file_name(name))
 }

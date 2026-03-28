@@ -213,6 +213,23 @@ pub fn install_css() {
           padding: 2px 0;
         }
 
+        .workspace-block {
+          margin-top: 4px;
+          padding-top: 6px;
+          border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .workspace-section-label {
+          font-size: 10px;
+          color: #8d8e99;
+          margin-top: 4px;
+        }
+
+        .workspace-detail-line {
+          font-size: 11px;
+          color: #c3c6d3;
+        }
+
         .shortcut-action, .shortcut-combo {
           font-family: 'DepartureMono Nerd Font', monospace;
           font-size: 11px;

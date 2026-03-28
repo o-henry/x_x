@@ -7,7 +7,10 @@ pub struct WorkspacePanelView {
     pub root: gtk::Box,
 }
 
-pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
+pub fn build_workspace_panel(
+    snapshot: &RuntimeSnapshot,
+    show_terminal_sessions: bool,
+) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
     let body = gtk::Box::new(Orientation::Vertical, 14);
     body.add_css_class("pane-body");
@@ -49,7 +52,7 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let shortcut_legend = gtk::Box::new(Orientation::Vertical, 4);
     shortcut_legend.add_css_class("shortcut-legend");
     for (label, accel) in [
-        ("TERMINAL", "CMD+T"),
+        ("TERMINAL SESSIONS", "CMD+T"),
         ("STATUS", "CMD+SHIFT+S"),
         ("CLEAR STATUS", "CMD+SHIFT+X"),
         ("PROGRESS", "CMD+SHIFT+P"),
@@ -63,6 +66,7 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     body.append(&summary);
     body.append(&state_row);
     body.append(&shortcut_legend);
+    body.append(&workspace_snapshot_block(snapshot, show_terminal_sessions));
     frame.body.append(&body);
 
     WorkspacePanelView { root: frame.root }
@@ -105,4 +109,110 @@ fn shortcut_line(action: &str, combo: &str) -> gtk::Box {
     row.append(&action_label);
     row.append(&combo_label);
     row
+}
+
+fn workspace_snapshot_block(snapshot: &RuntimeSnapshot, show_terminal_sessions: bool) -> gtk::Box {
+    let block = gtk::Box::new(Orientation::Vertical, 10);
+    block.add_css_class("workspace-block");
+
+    block.append(&section_label("WORKTREE"));
+    block.append(&detail_line(
+        &current_workspace_cwd(snapshot).unwrap_or_else(|| "No active cwd".to_string()),
+    ));
+
+    block.append(&section_label("INBOX PREVIEW"));
+    let unread = snapshot
+        .notifications
+        .iter()
+        .filter(|row| row.workspace == snapshot.active_workspace && row.unread)
+        .take(3)
+        .cloned()
+        .collect::<Vec<_>>();
+    if unread.is_empty() {
+        block.append(&detail_line("No unread notifications"));
+    } else {
+        for item in unread {
+            let text = match item.body.as_deref() {
+                Some(body) if !body.is_empty() => format!("{}  {}", item.title, body),
+                _ => item.title,
+            };
+            block.append(&detail_line(&text));
+        }
+    }
+
+    if show_terminal_sessions {
+        block.append(&section_label("TERMINAL SESSIONS"));
+        let panes = snapshot
+            .task_panes
+            .iter()
+            .filter(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
+            .take(4)
+            .collect::<Vec<_>>();
+        if panes.is_empty() {
+            block.append(&detail_line("No live task panes in this workspace"));
+        } else {
+            for pane in panes {
+                let state = if pane.is_failed {
+                    "failed"
+                } else if pane.is_dead {
+                    "dead"
+                } else {
+                    "running"
+                };
+                let cwd = pane
+                    .current_working_dir
+                    .as_deref()
+                    .map(shorten_cwd)
+                    .unwrap_or_else(|| "no cwd".to_string());
+                block.append(&detail_line(&format!(
+                    "pane {}  {}  {}",
+                    pane.pane_id, state, cwd
+                )));
+            }
+        }
+    }
+
+    block
+}
+
+fn section_label(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_halign(Align::Start);
+    label.add_css_class("workspace-section-label");
+    label
+}
+
+fn detail_line(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_halign(Align::Start);
+    label.set_wrap(true);
+    label.add_css_class("workspace-detail-line");
+    label
+}
+
+fn current_workspace_cwd(snapshot: &RuntimeSnapshot) -> Option<String> {
+    snapshot
+        .task_panes
+        .iter()
+        .find(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
+        .and_then(|row| row.current_working_dir.as_ref())
+        .map(|cwd| shorten_cwd(cwd))
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|path| path.to_str().map(shorten_cwd))
+        })
+}
+
+fn shorten_cwd(cwd: &str) -> String {
+    let without_scheme = cwd.strip_prefix("file://").unwrap_or(cwd);
+    let mut parts = without_scheme
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() <= 2 {
+        return without_scheme.to_string();
+    }
+    let tail = parts.split_off(parts.len() - 2);
+    format!("…/{}/{}", tail[0], tail[1])
 }

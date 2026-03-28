@@ -19,6 +19,7 @@ pub struct PaneArrangement {
     pub compact: bool,
     pub metadata_first: bool,
     pub tasks_first: bool,
+    pub show_terminal_sessions: bool,
 }
 
 pub struct PaneFrame {
@@ -99,7 +100,8 @@ pub fn build_shell(
     center_column.set_shrink_end_child(false);
     center_column.set_position(layout.workspace_split);
 
-    let workspace_view = workspace::build_workspace_panel(snapshot);
+    let workspace_view =
+        workspace::build_workspace_panel(snapshot, arrangement.show_terminal_sessions);
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);
     workspace_view.root.set_size_request(540, 320);
