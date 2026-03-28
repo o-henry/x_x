@@ -79,6 +79,8 @@ pub fn build_shell(
     center_column.set_wide_handle(true);
     center_column.set_hexpand(true);
     center_column.set_vexpand(true);
+    center_column.set_resize_start_child(true);
+    center_column.set_resize_end_child(true);
     center_column.set_shrink_start_child(false);
     center_column.set_shrink_end_child(false);
     center_column.set_position(layout.workspace_split);
@@ -105,6 +107,8 @@ pub fn build_shell(
     let lower_center = gtk::Paned::new(Orientation::Horizontal);
     lower_center.add_css_class("shell-split");
     lower_center.set_wide_handle(true);
+    lower_center.set_resize_start_child(true);
+    lower_center.set_resize_end_child(false);
     lower_center.set_shrink_start_child(false);
     lower_center.set_shrink_end_child(false);
     lower_center.set_position(layout.lower_split);
@@ -117,6 +121,8 @@ pub fn build_shell(
     let side_column = gtk::Paned::new(Orientation::Vertical);
     side_column.add_css_class("shell-split");
     side_column.set_wide_handle(true);
+    side_column.set_resize_start_child(true);
+    side_column.set_resize_end_child(true);
     side_column.set_shrink_start_child(false);
     side_column.set_shrink_end_child(false);
     side_column.set_hexpand(false);
@@ -145,6 +151,8 @@ pub fn build_shell(
     body_split.set_wide_handle(true);
     body_split.set_hexpand(true);
     body_split.set_vexpand(true);
+    body_split.set_resize_start_child(true);
+    body_split.set_resize_end_child(false);
     body_split.set_shrink_start_child(false);
     body_split.set_shrink_end_child(false);
     body_split.set_position(layout.body_split);

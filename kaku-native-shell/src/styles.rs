@@ -65,8 +65,8 @@ pub fn install_css() {
         }
 
         .rail-row.active {
-          background: rgba(255,255,255,0.03);
-          border-left-color: rgba(122, 161, 255, 0.7);
+          background: rgba(255,255,255,0.045);
+          border-left-color: transparent;
         }
 
         .rail-name, .pane-title, .row-title, .workspace-title, .info-value {
@@ -92,6 +92,10 @@ pub fn install_css() {
 
         .rail-toggle:hover {
           background: rgba(255,255,255,0.04);
+        }
+
+        .rail-toggle image {
+          color: #f3f4f8;
         }
 
         .pane-panel {
