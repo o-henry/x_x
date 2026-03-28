@@ -137,3 +137,23 @@ Plans:
 | 5. Hardening and Compatibility | 5/5 | Complete | 2026-03-27 |
 | 6. Operator UI Surfaces | 4/4 | Complete | 2026-03-27 |
 | 7. Operator Visual Polish | 0/TBD | Not started | - |
+
+### Phase 8: Native Shell Replatform
+
+**Goal:** Replace the current primary UI shell path with a Rust-native native shell that presents the existing Kaku control plane through a persistent reference-matched workspace shell layout.
+**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-05, POLISH-01, POLISH-02, POLISH-03, POLISH-04
+**Depends on:** Phase 6 (Phase 8 supersedes the unfinished visual-polish remainder of Phase 7)
+**Plans:** 5 plans
+**Success Criteria** (what must be TRUE):
+  1. Developer can launch a Rust-native shell that boots or owns the shared Kaku runtime path without requiring `kaku-gui` to be the primary shell authority.
+  2. Developer sees a persistent shell layout with left workspace rail, thin top chrome, dominant main work surface, and persistent context panes that materially matches the provided references more closely than the old `kaku-gui` renderer path.
+  3. Developer can inspect and mutate the existing Kaku control-plane state from the new shell, including workspace status/progress/log data plus notification/task context.
+  4. Existing machine-readable contracts and mux-owned state remain the backend truth; the new shell does not introduce a parallel control-plane store.
+  5. MVP may bridge terminal rendering through companion Kaku windows, but that bridge must be proven end-to-end on the shared runtime path before Phase 08 can close as complete.
+
+Plans:
+- [ ] 08-01-PLAN.md — Extract Wave 0 shell controller/runtime seams and move bootstrap authority into shared runtime for the native shell path.
+- [ ] 08-02-PLAN.md — Replace timer polling with mux-driven event subscriptions and a reusable shell snapshot/action architecture.
+- [ ] 08-03-PLAN.md — Build the persistent reference-matched shell layout with real runtime data, DM Mono-first styling, and a blocking screenshot gate.
+- [ ] 08-04-PLAN.md — Replace the risky `--always-new-process` escape hatch with an honest companion-terminal bridge and common operator action parity.
+- [ ] 08-05-PLAN.md — Close Phase 08 with full validation, manual UAT, honest stop conditions, and canonical docs/artifacts.
