@@ -47,10 +47,9 @@ impl ShellActionTarget for RecordingTarget {
     }
 
     fn mark_notifications_read(&self, notification_ids: &[String]) {
-        self.calls.borrow_mut().push(format!(
-            "mark-read:{}",
-            notification_ids.join(",")
-        ));
+        self.calls
+            .borrow_mut()
+            .push(format!("mark-read:{}", notification_ids.join(",")));
     }
 }
 

@@ -97,7 +97,10 @@ impl AppController {
         mux.subscribe(move |notification| {
             let scope = refresh_scope_for_notification(&notification);
             if scope != SnapshotRefreshScope::Ignore {
-                pending_refresh_scopes.lock().expect("refresh queue").push(scope);
+                pending_refresh_scopes
+                    .lock()
+                    .expect("refresh queue")
+                    .push(scope);
                 let window_weak = window_weak.clone();
                 main_context.invoke(move || {
                     if let Some(window) = window_weak.upgrade() {
@@ -176,7 +179,11 @@ impl AppController {
         let subtitle = gtk::Label::new(Some(&format!(
             "{} workspaces  {} unread  {} tasks",
             snapshot.workspaces.len(),
-            snapshot.notifications.iter().filter(|row| row.unread).count(),
+            snapshot
+                .notifications
+                .iter()
+                .filter(|row| row.unread)
+                .count(),
             snapshot.task_panes.len()
         )));
         subtitle.set_halign(Align::Start);
@@ -324,7 +331,10 @@ impl AppController {
 
         let summary = gtk::Label::new(Some(&format!(
             "{} unread  {} running  {} failed  {} logs",
-            workspace.unread_count, workspace.running_count, workspace.failed_count, workspace.log_count
+            workspace.unread_count,
+            workspace.running_count,
+            workspace.failed_count,
+            workspace.log_count
         )));
         summary.set_halign(Align::Start);
         summary.add_css_class("workspace-summary");
@@ -615,8 +625,10 @@ impl AppController {
         }
         let mux = Mux::get();
         let context = self.action_context(mux.as_ref());
-        if matches!(action.execute(mux.as_ref(), &context), ShellActionOutcome::NoMutation)
-            && matches!(action, ShellAction::Refresh)
+        if matches!(
+            action.execute(mux.as_ref(), &context),
+            ShellActionOutcome::NoMutation
+        ) && matches!(action, ShellAction::Refresh)
         {
             self.rerender();
         }
