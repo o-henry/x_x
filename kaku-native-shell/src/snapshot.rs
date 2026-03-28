@@ -40,12 +40,12 @@ impl Default for ShellLayoutContract {
     fn default() -> Self {
         Self {
             chrome_height: 32,
-            rail_width: 232,
+            rail_width: 256,
             collapsed_rail_width: 72,
-            body_split: 920,
-            workspace_split: 380,
-            lower_split: 660,
-            side_split: 240,
+            body_split: 940,
+            workspace_split: 430,
+            lower_split: 620,
+            side_split: 316,
         }
     }
 }

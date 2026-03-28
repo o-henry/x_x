@@ -65,7 +65,7 @@ pub fn build_shell(
         if rail_collapsed {
             layout.collapsed_rail_width
         } else {
-            208.max(layout.rail_width)
+            224.max(layout.rail_width)
         },
         -1,
     );
@@ -86,12 +86,21 @@ pub fn build_shell(
     let workspace_view = workspace::build_workspace_panel(snapshot);
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);
+    workspace_view.root.set_size_request(540, 320);
     let activity_panel = workspace::build_activity_panel(snapshot);
     let metadata_panel = context::build_metadata_panel(snapshot);
     activity_panel.set_hexpand(true);
     activity_panel.set_vexpand(true);
-    metadata_panel.set_hexpand(true);
+    activity_panel.set_size_request(420, 220);
+    metadata_panel.set_hexpand(false);
     metadata_panel.set_vexpand(true);
+    metadata_panel.set_size_request(300, 220);
+
+    let metadata_host = gtk::Box::new(Orientation::Horizontal, 0);
+    metadata_host.set_hexpand(false);
+    metadata_host.set_vexpand(true);
+    metadata_host.set_size_request(layout.side_split, -1);
+    metadata_host.append(&metadata_panel);
 
     let lower_center = gtk::Paned::new(Orientation::Horizontal);
     lower_center.add_css_class("shell-split");
@@ -100,7 +109,7 @@ pub fn build_shell(
     lower_center.set_shrink_end_child(false);
     lower_center.set_position(layout.lower_split);
     lower_center.set_start_child(Some(&activity_panel));
-    lower_center.set_end_child(Some(&metadata_panel));
+    lower_center.set_end_child(Some(&metadata_host));
 
     center_column.set_start_child(Some(&workspace_view.root));
     center_column.set_end_child(Some(&lower_center));
@@ -110,16 +119,26 @@ pub fn build_shell(
     side_column.set_wide_handle(true);
     side_column.set_shrink_start_child(false);
     side_column.set_shrink_end_child(false);
-    side_column.set_hexpand(true);
+    side_column.set_hexpand(false);
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
     side_column.set_position(layout.side_split);
     let inbox_view = context::build_inbox_panel(snapshot);
     let task_panel = context::build_task_panel(snapshot);
     inbox_view.root.set_vexpand(true);
+    inbox_view.root.set_hexpand(true);
+    inbox_view.root.set_size_request(layout.side_split, 240);
     task_panel.set_vexpand(true);
+    task_panel.set_hexpand(true);
+    task_panel.set_size_request(layout.side_split, 220);
     side_column.set_start_child(Some(&inbox_view.root));
     side_column.set_end_child(Some(&task_panel));
+
+    let side_host = gtk::Box::new(Orientation::Horizontal, 0);
+    side_host.set_hexpand(false);
+    side_host.set_vexpand(true);
+    side_host.set_size_request(layout.side_split, -1);
+    side_host.append(&side_column);
 
     let body_split = Paned::new(Orientation::Horizontal);
     body_split.add_css_class("shell-split");
@@ -130,7 +149,7 @@ pub fn build_shell(
     body_split.set_shrink_end_child(false);
     body_split.set_position(layout.body_split);
     body_split.set_start_child(Some(&center_column));
-    body_split.set_end_child(Some(&side_column));
+    body_split.set_end_child(Some(&side_host));
 
     body.append(&body_split);
 
@@ -227,7 +246,7 @@ pub(crate) fn pane_panel(
             gesture.current_event_time(),
         );
     });
-    header.add_controller(drag);
+    title_stack.add_controller(drag);
 
     panel.append(&header);
 

@@ -10,6 +10,8 @@ pub struct InboxPanelView {
 
 pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
     let mark_read = action_button("Mark Read");
+    mark_read.add_css_class("subtle");
+    mark_read.add_css_class("text-only");
     let frame = pane_panel("Inbox", None, Some(&mark_read));
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
