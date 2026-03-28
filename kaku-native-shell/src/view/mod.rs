@@ -90,7 +90,10 @@ pub fn build_shell(
     rail_view.root.set_hexpand(false);
     rail_view.root.set_halign(Align::Start);
     rail_view.root.set_vexpand(true);
-    body.append(&rail_view.root);
+    rail_view.root.set_visible(!rail_collapsed);
+    if !rail_collapsed {
+        body.append(&rail_view.root);
+    }
 
     let center_column = gtk::Paned::new(Orientation::Vertical);
     center_column.add_css_class("shell-split");

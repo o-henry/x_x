@@ -41,7 +41,7 @@ impl Default for ShellLayoutContract {
         Self {
             chrome_height: 28,
             rail_width: 284,
-            collapsed_rail_width: 84,
+            collapsed_rail_width: 0,
             body_split: 872,
             workspace_split: 356,
             lower_split: 618,
