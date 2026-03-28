@@ -73,8 +73,10 @@ pub struct AppController {
     pub window: adw::ApplicationWindow,
     selected_workspace: RefCell<Option<String>>,
     rail_collapsed: Cell<bool>,
+    inbox_collapsed: Cell<bool>,
     metadata_first: Cell<bool>,
     tasks_first: Cell<bool>,
+    show_metadata: Cell<bool>,
     show_terminal_sessions: Cell<bool>,
     pending_refresh_scopes: Arc<Mutex<Vec<SnapshotRefreshScope>>>,
     runtime_error: RefCell<Option<String>>,
@@ -95,8 +97,10 @@ impl AppController {
             window,
             selected_workspace: RefCell::new(None),
             rail_collapsed: Cell::new(false),
+            inbox_collapsed: Cell::new(false),
             metadata_first: Cell::new(false),
             tasks_first: Cell::new(false),
+            show_metadata: Cell::new(false),
             show_terminal_sessions: Cell::new(true),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
@@ -138,7 +142,9 @@ impl AppController {
                 compact,
                 metadata_first: self.metadata_first.get(),
                 tasks_first: self.tasks_first.get(),
+                show_metadata: self.show_metadata.get(),
                 show_terminal_sessions: self.show_terminal_sessions.get(),
+                inbox_collapsed: self.inbox_collapsed.get(),
             },
             width,
         );
@@ -224,18 +230,16 @@ impl AppController {
             refresh_button,
             terminal_button,
             rail_buttons,
+            rail_inbox_toggle_button,
             activity_root,
             metadata_root,
-            inbox_root,
-            tasks_root,
             activity_panel,
             metadata_panel,
-            inbox_panel,
-            tasks_panel,
             activity_header,
             metadata_header,
-            inbox_header,
-            tasks_header,
+            tasks_root: _,
+            tasks_panel: _,
+            tasks_header: _,
         } = shell;
 
         {
@@ -282,17 +286,24 @@ impl AppController {
         }
         {
             let this = Rc::clone(self);
-            bind_header_swap(
-                &activity_header,
-                &activity_root,
-                &metadata_header,
-                &metadata_panel,
-                &metadata_root,
-                "lower-swap",
-                move || this.defer(|controller| controller.toggle_lower_panes()),
-            );
+            rail_inbox_toggle_button
+                .connect_clicked(move |_| this.defer(|controller| controller.toggle_rail_inbox()));
         }
         {
+            let this = Rc::clone(self);
+            if this.show_metadata.get() {
+                bind_header_swap(
+                    &activity_header,
+                    &activity_root,
+                    &metadata_header,
+                    &metadata_panel,
+                    &metadata_root,
+                    "lower-swap",
+                    move || this.defer(|controller| controller.toggle_lower_panes()),
+                );
+            }
+        }
+        if self.show_metadata.get() {
             let this = Rc::clone(self);
             bind_header_swap(
                 &metadata_header,
@@ -302,30 +313,6 @@ impl AppController {
                 &activity_root,
                 "lower-swap",
                 move || this.defer(|controller| controller.toggle_lower_panes()),
-            );
-        }
-        {
-            let this = Rc::clone(self);
-            bind_header_swap(
-                &inbox_header,
-                &inbox_root,
-                &tasks_header,
-                &tasks_panel,
-                &tasks_root,
-                "side-swap",
-                move || this.defer(|controller| controller.toggle_side_panes()),
-            );
-        }
-        {
-            let this = Rc::clone(self);
-            bind_header_swap(
-                &tasks_header,
-                &tasks_root,
-                &inbox_header,
-                &inbox_panel,
-                &inbox_root,
-                "side-swap",
-                move || this.defer(|controller| controller.toggle_side_panes()),
             );
         }
 
@@ -347,13 +334,13 @@ impl AppController {
         self.rerender();
     }
 
-    fn toggle_lower_panes(self: &Rc<Self>) {
-        self.metadata_first.set(!self.metadata_first.get());
+    fn toggle_rail_inbox(self: &Rc<Self>) {
+        self.inbox_collapsed.set(!self.inbox_collapsed.get());
         self.rerender();
     }
 
-    fn toggle_side_panes(self: &Rc<Self>) {
-        self.tasks_first.set(!self.tasks_first.get());
+    fn toggle_lower_panes(self: &Rc<Self>) {
+        self.metadata_first.set(!self.metadata_first.get());
         self.rerender();
     }
 
@@ -386,9 +373,14 @@ impl AppController {
             let this = Rc::clone(self);
             move || this.toggle_rail()
         });
+        self.install_action("toggle-metadata", {
+            let this = Rc::clone(self);
+            move || this.toggle_metadata()
+        });
 
         app.set_accels_for_action("win.launch-terminal", &["<Meta>t"]);
         app.set_accels_for_action("win.toggle-rail", &["<Meta>b"]);
+        app.set_accels_for_action("win.toggle-metadata", &["<Meta><Shift>m"]);
         app.set_accels_for_action("win.set-status", &["<Meta><Shift>s"]);
         app.set_accels_for_action("win.clear-status", &["<Meta><Shift>x"]);
         app.set_accels_for_action("win.set-progress", &["<Meta><Shift>p"]);
@@ -426,6 +418,11 @@ impl AppController {
         self.show_terminal_sessions
             .set(!self.show_terminal_sessions.get());
         self.runtime_error.replace(None);
+        self.rerender();
+    }
+
+    fn toggle_metadata(self: &Rc<Self>) {
+        self.show_metadata.set(!self.show_metadata.get());
         self.rerender();
     }
 

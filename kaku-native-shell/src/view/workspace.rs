@@ -54,6 +54,7 @@ pub fn build_workspace_panel(
     for (label, accel) in [
         ("TERMINAL SESSIONS", "CMD+T"),
         ("WORKSPACES", "CMD+B"),
+        ("METADATA", "CMD+SHIFT+M"),
         ("STATUS", "CMD+SHIFT+S"),
         ("CLEAR STATUS", "CMD+SHIFT+X"),
         ("PROGRESS", "CMD+SHIFT+P"),

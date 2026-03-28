@@ -65,6 +65,27 @@ pub fn install_css() {
           border-right: 1px solid rgba(255,255,255,0.05);
         }
 
+        .rail-inbox-header {
+          border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .rail-toggle-button,
+        .rail-toggle-button:hover,
+        .rail-toggle-button:focus,
+        .rail-toggle-button:active {
+          background: transparent;
+          border: none;
+          box-shadow: none;
+          outline: none;
+          min-width: 16px;
+          min-height: 16px;
+          padding: 0;
+        }
+
+        .rail-inbox-region {
+          border-top: 1px solid rgba(255,255,255,0.03);
+        }
+
         .side-column > box {
           min-height: 0;
         }

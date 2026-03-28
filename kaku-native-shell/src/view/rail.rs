@@ -5,9 +5,10 @@ use gtk::{Align, Orientation};
 pub struct RailView {
     pub root: gtk::Box,
     pub workspace_buttons: Vec<(String, gtk::Button)>,
+    pub inbox_toggle_button: gtk::Button,
 }
 
-pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
+pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: bool) -> RailView {
     let rail = gtk::Box::new(Orientation::Vertical, 4);
     rail.add_css_class("workspace-rail");
     rail.set_margin_start(0);
@@ -31,6 +32,10 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
 
     header.append(&eyebrow);
     rail.append(&header);
+
+    let top_region = gtk::Box::new(Orientation::Vertical, 0);
+    top_region.set_vexpand(true);
+    rail.append(&top_region);
 
     let mut workspace_buttons = Vec::new();
     for summary in &snapshot.workspaces {
@@ -132,12 +137,96 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool) -> RailView {
         row.set_child(Some(&outer));
 
         workspace_buttons.push((summary.name.clone(), row.clone()));
-        rail.append(&row);
+        top_region.append(&row);
     }
+
+    let inbox_toggle_button = gtk::Button::new();
+    inbox_toggle_button.add_css_class("rail-toggle-button");
+    let icon_path = if inbox_collapsed {
+        format!(
+            "{}/assets/icons/inbox-toggle-up.svg",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    } else {
+        format!(
+            "{}/assets/icons/inbox-toggle-down.svg",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    };
+    let toggle_icon = gtk::Image::from_file(icon_path);
+    toggle_icon.set_pixel_size(11);
+    inbox_toggle_button.set_child(Some(&toggle_icon));
+
+    let inbox_header = gtk::Box::new(Orientation::Horizontal, 8);
+    inbox_header.add_css_class("rail-inbox-header");
+    inbox_header.set_margin_start(14);
+    inbox_header.set_margin_end(10);
+    inbox_header.set_margin_top(8);
+    inbox_header.set_margin_bottom(6);
+    inbox_header.set_halign(Align::Fill);
+
+    let inbox_label = gtk::Label::new(Some("INBOX"));
+    inbox_label.set_halign(Align::Start);
+    inbox_label.set_hexpand(true);
+    inbox_label.add_css_class("rail-eyebrow");
+    inbox_header.append(&inbox_label);
+    inbox_header.append(&inbox_toggle_button);
+    rail.append(&inbox_header);
+
+    let inbox_region = gtk::Box::new(Orientation::Vertical, 0);
+    inbox_region.add_css_class("rail-inbox-region");
+    inbox_region.set_vexpand(true);
+    inbox_region.set_visible(!inbox_collapsed);
+    inbox_region.set_margin_bottom(8);
+
+    let selected = snapshot.active_workspace.as_str();
+    let unread = snapshot
+        .notifications
+        .iter()
+        .filter(|row| row.workspace == selected && row.unread)
+        .take(6)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    if unread.is_empty() {
+        let empty = gtk::Label::new(Some("No unread notifications"));
+        empty.set_halign(Align::Start);
+        empty.set_wrap(true);
+        empty.set_margin_start(14);
+        empty.set_margin_end(14);
+        empty.set_margin_top(8);
+        empty.add_css_class("empty-state");
+        inbox_region.append(&empty);
+    } else {
+        let list = gtk::Box::new(Orientation::Vertical, 6);
+        list.set_margin_start(14);
+        list.set_margin_end(14);
+        list.set_margin_top(8);
+        list.set_margin_bottom(6);
+        for row in unread {
+            let outer = gtk::Box::new(Orientation::Vertical, 4);
+            outer.add_css_class("list-row");
+            let title = gtk::Label::new(Some(&row.title));
+            title.set_halign(Align::Start);
+            title.add_css_class("row-title");
+            outer.append(&title);
+            if let Some(body) = row.body {
+                let detail = gtk::Label::new(Some(&body));
+                detail.set_halign(Align::Start);
+                detail.set_wrap(true);
+                detail.add_css_class("row-detail");
+                outer.append(&detail);
+            }
+            list.append(&outer);
+        }
+        inbox_region.append(&list);
+    }
+    rail.append(&inbox_region);
 
     RailView {
         root: rail,
         workspace_buttons,
+        inbox_toggle_button,
     }
 }
 
