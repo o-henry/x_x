@@ -90,12 +90,13 @@ pub fn build_shell(
     };
     let total_width = if window_width > 0 { window_width } else { 1480 };
     let content_width = (total_width - rail_width).max(900);
-    let side_width = ((content_width as f32) * 0.26)
+    let side_width = ((content_width as f32) * 0.24)
         .round()
         .clamp(228.0, layout.side_split as f32) as i32;
-    let metadata_width = ((content_width as f32) * 0.24)
+    let metadata_width = ((content_width as f32) * 0.18)
         .round()
-        .clamp(220.0, (side_width - 24).max(220) as f32) as i32;
+        .clamp(180.0, (body_position_cap(side_width) - 24).max(180) as f32)
+        as i32;
     let body_position = (content_width - side_width).max(620);
     let lower_position = (body_position - metadata_width).max(320);
 
@@ -282,7 +283,7 @@ pub(crate) fn pane_panel(
     title_stack.set_margin_top(8);
     title_stack.set_margin_bottom(8);
 
-    let title_label = gtk::Label::new(Some(title));
+    let title_label = gtk::Label::new(Some(&title.to_uppercase()));
     title_label.set_halign(Align::Start);
     title_label.add_css_class("pane-title");
     title_stack.append(&title_label);
@@ -319,6 +320,10 @@ pub(crate) fn pane_panel(
         header,
         body,
     }
+}
+
+fn body_position_cap(side_width: i32) -> i32 {
+    620.max(420 + side_width)
 }
 
 pub(crate) fn empty_state(message: &str) -> gtk::Label {
