@@ -4,7 +4,7 @@ use crate::snapshot::{
     derive_runtime_snapshot, refresh_scope_for_notification, RuntimeSnapshot, ShellLayoutContract,
     SnapshotRefreshScope,
 };
-use crate::view::{build_shell, PaneArrangement, ShellView};
+use crate::view::{bind_header_swap, build_shell, PaneArrangement, ShellView};
 use adw::prelude::*;
 use gio::SimpleAction;
 use gtk::gdk;
@@ -224,8 +224,10 @@ impl AppController {
             rail_toggle_button,
             rail_buttons,
             inbox_mark_read_button,
-            swap_lower_button,
-            swap_side_button,
+            activity_header,
+            metadata_header,
+            inbox_header,
+            tasks_header,
         } = shell;
 
         {
@@ -281,15 +283,35 @@ impl AppController {
                 this.defer(|controller| controller.mark_notifications_read_for_selected())
             });
         }
-        if let Some(swap_lower_button) = swap_lower_button {
+        {
             let this = Rc::clone(self);
-            swap_lower_button
-                .connect_clicked(move |_| this.defer(|controller| controller.toggle_lower_panes()));
+            bind_header_swap(
+                &activity_header,
+                &metadata_header,
+                "lower-swap",
+                move || this.defer(|controller| controller.toggle_lower_panes()),
+            );
         }
-        if let Some(swap_side_button) = swap_side_button {
+        {
             let this = Rc::clone(self);
-            swap_side_button
-                .connect_clicked(move |_| this.defer(|controller| controller.toggle_side_panes()));
+            bind_header_swap(
+                &metadata_header,
+                &activity_header,
+                "lower-swap",
+                move || this.defer(|controller| controller.toggle_lower_panes()),
+            );
+        }
+        {
+            let this = Rc::clone(self);
+            bind_header_swap(&inbox_header, &tasks_header, "side-swap", move || {
+                this.defer(|controller| controller.toggle_side_panes())
+            });
+        }
+        {
+            let this = Rc::clone(self);
+            bind_header_swap(&tasks_header, &inbox_header, "side-swap", move || {
+                this.defer(|controller| controller.toggle_side_panes())
+            });
         }
 
         self.window.set_content(Some(&root));

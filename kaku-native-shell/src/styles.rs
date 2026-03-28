@@ -109,7 +109,7 @@ pub fn install_css() {
         .pane-titlebar {
           background: #171920;
           border-bottom: 1px solid rgba(255,255,255,0.06);
-          min-height: 36px;
+          min-height: 32px;
         }
 
         .pane-titlebar:hover {
