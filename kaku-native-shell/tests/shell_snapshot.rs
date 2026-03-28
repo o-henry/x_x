@@ -71,7 +71,7 @@ fn shell_typography_contract() {
     assert_eq!(
         contract.typography.primary_mono_family,
         [
-            "DepartureMono Nerd Font",
+            "Basically A Mono",
             "1984대화나눔_본문체_Regular",
             "monospace"
         ]

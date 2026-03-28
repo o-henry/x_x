@@ -55,7 +55,7 @@ pub fn shell_ui_contract() -> ShellUiContract {
         persistent_context_slots: ["inbox", "tasks", "metadata"],
         typography: ShellTypographyContract {
             primary_mono_family: [
-                "DepartureMono Nerd Font",
+                "Basically A Mono",
                 "1984대화나눔_본문체_Regular",
                 "monospace",
             ],

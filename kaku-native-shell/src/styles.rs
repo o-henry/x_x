@@ -5,7 +5,7 @@ pub fn install_css() {
     provider.load_from_data(
         "
         .native-shell-window, .shell-root, window, box {
-          font-family: 'DepartureMono Nerd Font', '1984대화나눔_본문체_Regular', '1984대화나눔_본문체_Light', '1984대화나눔_본문체_Bold', monospace;
+          font-family: 'Basically A Mono', '1984대화나눔_본문체_Regular', '1984대화나눔_본문체_Light', '1984대화나눔_본문체_Bold', monospace;
         }
 
         .shell-root {
