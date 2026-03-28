@@ -165,6 +165,9 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     inbox_header.add_css_class("pane-titlebar");
     inbox_header.add_css_class("rail-titlebar");
     inbox_header.add_css_class("rail-inbox-header");
+    if inbox_collapsed {
+        inbox_header.add_css_class("rail-inbox-collapsed");
+    }
     inbox_header.set_halign(Align::Fill);
     inbox_header.set_hexpand(true);
     let inbox_label = gtk::Label::new(Some("INBOX"));
@@ -181,11 +184,6 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     inbox_toggle_button.set_margin_end(10);
     inbox_header.append(&inbox_toggle_button);
     rail.append(&inbox_header);
-
-    let inbox_footer_spacer = gtk::Box::new(Orientation::Vertical, 0);
-    inbox_footer_spacer.add_css_class("rail-footer-spacer");
-    inbox_footer_spacer.set_visible(inbox_collapsed);
-    rail.append(&inbox_footer_spacer);
 
     let inbox_region = gtk::Box::new(Orientation::Vertical, 0);
     inbox_region.add_css_class("rail-inbox-region");

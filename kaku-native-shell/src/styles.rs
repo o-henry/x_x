@@ -74,6 +74,10 @@ pub fn install_css() {
           border-top: 1px solid rgba(255,255,255,0.05);
         }
 
+        .rail-inbox-collapsed {
+          min-height: 44px;
+        }
+
         .rail-toggle-button,
         .rail-toggle-button:hover,
         .rail-toggle-button:focus,
@@ -90,11 +94,6 @@ pub fn install_css() {
         .rail-inbox-region {
           border-top: 1px solid rgba(255,255,255,0.03);
           padding-bottom: 12px;
-        }
-
-        .rail-footer-spacer {
-          min-height: 12px;
-          background: #121318;
         }
 
         .side-column > box {

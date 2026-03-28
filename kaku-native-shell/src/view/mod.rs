@@ -132,8 +132,17 @@ pub fn build_shell(
     activity_view.root.set_vexpand(true);
     activity_view.root.set_size_request(0, 220);
     metadata_view.root.set_hexpand(false);
-    metadata_view.root.set_vexpand(true);
-    metadata_view.root.set_size_request(metadata_width, 220);
+    metadata_view
+        .root
+        .set_vexpand(!arrangement.metadata_collapsed);
+    metadata_view.root.set_size_request(
+        metadata_width,
+        if arrangement.metadata_collapsed {
+            -1
+        } else {
+            220
+        },
+    );
 
     center_column.set_start_child(Some(&workspace_view.root));
     center_column.set_end_child(Some(&activity_view.root));
@@ -148,25 +157,26 @@ pub fn build_shell(
     side_host.set_size_request(side_width, -1);
 
     if arrangement.show_metadata {
-        let side_split = gtk::Paned::new(Orientation::Vertical);
-        side_split.add_css_class("shell-split");
-        side_split.set_wide_handle(true);
-        side_split.set_hexpand(true);
-        side_split.set_vexpand(true);
-        side_split.set_resize_start_child(true);
-        side_split.set_resize_end_child(true);
-        side_split.set_shrink_start_child(false);
-        side_split.set_shrink_end_child(false);
-        side_split.set_position(layout.workspace_split.min(220));
-
-        if arrangement.tasks_first {
+        if arrangement.metadata_collapsed {
+            task_view.root.set_vexpand(true);
+            metadata_view.root.set_vexpand(false);
+            side_host.append(&task_view.root);
+            side_host.append(&metadata_view.root);
+        } else {
+            let side_split = gtk::Paned::new(Orientation::Vertical);
+            side_split.add_css_class("shell-split");
+            side_split.set_wide_handle(true);
+            side_split.set_hexpand(true);
+            side_split.set_vexpand(true);
+            side_split.set_resize_start_child(true);
+            side_split.set_resize_end_child(true);
+            side_split.set_shrink_start_child(false);
+            side_split.set_shrink_end_child(false);
+            side_split.set_position(layout.workspace_split.min(220));
             side_split.set_start_child(Some(&task_view.root));
             side_split.set_end_child(Some(&metadata_view.root));
-        } else {
-            side_split.set_start_child(Some(&metadata_view.root));
-            side_split.set_end_child(Some(&task_view.root));
+            side_host.append(&side_split);
         }
-        side_host.append(&side_split);
     } else {
         side_host.append(&task_view.root);
     }
