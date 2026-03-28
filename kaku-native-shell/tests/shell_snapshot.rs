@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use kaku_native_shell::app_controller::shell_ui_contract;
 use kaku_native_shell::snapshot::{
     refresh_scope_for_notification, RuntimeSnapshot, RuntimeSnapshotSource, ShellLayoutContract,
     SnapshotRefreshScope, WorkspaceSummary,
@@ -33,6 +34,57 @@ fn shell_layout_contract() {
     };
     assert_eq!(workspace.name, "default");
     assert_eq!(workspace.progress, Some(32));
+
+    let contract = shell_ui_contract();
+    assert_eq!(contract.primary_surface, "workspace");
+    assert_eq!(contract.persistent_context_slots, ["inbox", "tasks", "metadata"]);
+    assert!(contract.layout_slots.contains(&"chrome"));
+    assert!(contract.layout_slots.contains(&"rail"));
+    assert!(contract.layout_slots.contains(&"activity"));
+}
+
+#[test]
+fn shell_typography_contract() {
+    let contract = shell_ui_contract();
+    assert_eq!(
+        contract.typography.primary_mono_family,
+        ["DM Mono", "SF Mono", "monospace"]
+    );
+    assert!(contract
+        .typography
+        .operator_classes
+        .contains(&"chrome-title"));
+    assert!(contract
+        .typography
+        .operator_classes
+        .contains(&"rail-name"));
+    assert!(contract
+        .typography
+        .operator_classes
+        .contains(&"pane-title"));
+}
+
+#[test]
+fn shell_affordance_contract() {
+    let contract = shell_ui_contract();
+    assert!(contract
+        .affordances
+        .compact_count_labels
+        .iter()
+        .all(|label| !label.contains("unread ") && !label.contains("running ")));
+    assert!(contract
+        .affordances
+        .header_badges
+        .iter()
+        .all(|label| label.chars().any(|ch| !ch.is_ascii_alphanumeric())));
+    assert!(contract
+        .affordances
+        .action_labels
+        .contains(&"↻"));
+    assert!(contract
+        .affordances
+        .action_labels
+        .contains(&"⌂ open terminal"));
 }
 
 #[derive(Clone, Default)]
