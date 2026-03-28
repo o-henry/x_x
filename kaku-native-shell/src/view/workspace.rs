@@ -1,6 +1,6 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
 use crate::view::{
-    compact_action_button, empty_state, pane_panel, pill, scroller, WorkspaceActionButtons,
+    empty_state, pane_panel, pill, scroller, subtle_action_button, WorkspaceActionButtons,
 };
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
@@ -48,23 +48,43 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
         state_row.append(&pill("unset"));
     }
 
-    let actions_row = gtk::Box::new(Orientation::Horizontal, 8);
+    let actions_row = gtk::Box::new(Orientation::Horizontal, 0);
     actions_row.set_halign(Align::Start);
-    let launch_terminal = compact_action_button("Open");
-    let set_status = compact_action_button("Status");
-    let clear_status = compact_action_button("Clear");
-    let set_progress = compact_action_button("Progress");
-    let clear_progress = compact_action_button("Reset");
-    let append_log = compact_action_button("Log");
+
+    let launch_terminal = subtle_action_button("terminal");
+    let set_status = subtle_action_button("set status");
+    let clear_status = subtle_action_button("clear status");
+    let set_progress = subtle_action_button("set progress");
+    let clear_progress = subtle_action_button("reset progress");
+    let append_log = subtle_action_button("append log");
+
+    let action_list = gtk::Box::new(Orientation::Vertical, 2);
+    action_list.add_css_class("action-popover-list");
+    action_list.set_margin_start(6);
+    action_list.set_margin_end(6);
+    action_list.set_margin_top(6);
+    action_list.set_margin_bottom(6);
     for button in [
+        &launch_terminal,
         &set_status,
         &clear_status,
         &set_progress,
         &clear_progress,
         &append_log,
     ] {
-        actions_row.append(button);
+        action_list.append(button);
     }
+
+    let action_popover = gtk::Popover::new();
+    action_popover.add_css_class("action-popover");
+    action_popover.set_has_arrow(false);
+    action_popover.set_child(Some(&action_list));
+
+    let action_menu = gtk::MenuButton::new();
+    action_menu.add_css_class("subtle-control-button");
+    action_menu.set_label("control");
+    action_menu.set_popover(Some(&action_popover));
+    actions_row.append(&action_menu);
 
     body.append(&title);
     body.append(&summary);

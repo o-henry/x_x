@@ -139,9 +139,10 @@ pub(crate) fn action_button(label: &str) -> gtk::Button {
     button
 }
 
-pub(crate) fn compact_action_button(label: &str) -> gtk::Button {
+pub(crate) fn subtle_action_button(label: &str) -> gtk::Button {
     let button = action_button(label);
-    button.add_css_class("compact");
+    button.add_css_class("text-only");
+    button.add_css_class("subtle");
     button
 }
 

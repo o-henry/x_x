@@ -122,6 +122,54 @@ pub fn install_css() {
           min-width: 0;
         }
 
+        .action-button.subtle {
+          background: transparent;
+          border: none;
+          min-height: 24px;
+          min-width: 0;
+          padding: 4px 8px;
+          color: #b2b6c5;
+        }
+
+        .action-button.subtle:hover {
+          background: rgba(255,255,255,0.04);
+          color: #e4e7f2;
+        }
+
+        .subtle-control-button {
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          min-height: 24px;
+          min-width: 0;
+          padding: 0;
+          color: #aeb3c3;
+          box-shadow: none;
+        }
+
+        .subtle-control-button:hover {
+          background: transparent;
+          color: #eceff8;
+        }
+
+        .subtle-control-label {
+          font-size: 10px;
+          font-weight: 600;
+          color: #aeb3c3;
+          padding: 2px 0;
+        }
+
+        .action-popover {
+          background: #17191f;
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        .action-popover-list {
+          background: transparent;
+        }
+
         .list-row, .info-row {
           padding: 6px 0;
           border-bottom: 1px solid rgba(255,255,255,0.04);
