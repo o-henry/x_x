@@ -1,21 +1,14 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
-use crate::view::{
-    empty_state, pane_panel, pill, scroller, subtle_action_button, WorkspaceActionButtons,
-};
+use crate::view::{empty_state, pane_panel, pill, scroller};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
 pub struct WorkspacePanelView {
     pub root: gtk::Box,
-    pub actions: WorkspaceActionButtons,
 }
 
 pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
-    let action_menu = gtk::MenuButton::new();
-    action_menu.add_css_class("subtle-control-button");
-    action_menu.set_label("control");
-
     let body = gtk::Box::new(Orientation::Vertical, 14);
     body.add_css_class("pane-body");
     body.add_css_class("pane-content");
@@ -51,55 +44,28 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
         state_row.append(&pill("unset"));
     }
 
-    let launch_terminal = subtle_action_button("terminal");
-    let set_status = subtle_action_button("set status");
-    let clear_status = subtle_action_button("clear status");
-    let set_progress = subtle_action_button("set progress");
-    let clear_progress = subtle_action_button("reset progress");
-    let append_log = subtle_action_button("append log");
+    let frame = pane_panel("Workspace", None, Option::<&gtk::Widget>::None);
 
-    let action_list = gtk::Box::new(Orientation::Vertical, 2);
-    action_list.add_css_class("action-popover-list");
-    action_list.set_margin_start(6);
-    action_list.set_margin_end(6);
-    action_list.set_margin_top(6);
-    action_list.set_margin_bottom(6);
-    for button in [
-        &launch_terminal,
-        &set_status,
-        &clear_status,
-        &set_progress,
-        &clear_progress,
-        &append_log,
+    let shortcut_legend = gtk::Box::new(Orientation::Vertical, 4);
+    shortcut_legend.add_css_class("shortcut-legend");
+    for (label, accel) in [
+        ("TERMINAL", "CMD+T"),
+        ("STATUS", "CMD+SHIFT+S"),
+        ("CLEAR STATUS", "CMD+SHIFT+X"),
+        ("PROGRESS", "CMD+SHIFT+P"),
+        ("RESET PROGRESS", "CMD+SHIFT+R"),
+        ("APPEND LOG", "CMD+SHIFT+L"),
     ] {
-        action_list.append(button);
+        shortcut_legend.append(&shortcut_line(label, accel));
     }
-
-    let action_popover = gtk::Popover::new();
-    action_popover.add_css_class("action-popover");
-    action_popover.set_has_arrow(false);
-    action_popover.set_child(Some(&action_list));
-
-    action_menu.set_popover(Some(&action_popover));
-
-    let frame = pane_panel("Workspace", None, Some(&action_menu));
 
     body.append(&title);
     body.append(&summary);
     body.append(&state_row);
+    body.append(&shortcut_legend);
     frame.body.append(&body);
 
-    WorkspacePanelView {
-        root: frame.root,
-        actions: WorkspaceActionButtons {
-            launch_terminal,
-            set_status,
-            clear_status,
-            set_progress,
-            clear_progress,
-            append_log,
-        },
-    }
+    WorkspacePanelView { root: frame.root }
 }
 
 pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
@@ -161,4 +127,22 @@ fn log_row(seq: u64, message: &str) -> gtk::Box {
     outer.append(&title);
     outer.append(&detail);
     outer
+}
+
+fn shortcut_line(action: &str, combo: &str) -> gtk::Box {
+    let row = gtk::Box::new(Orientation::Horizontal, 8);
+    row.add_css_class("shortcut-line");
+
+    let action_label = gtk::Label::new(Some(action));
+    action_label.set_halign(Align::Start);
+    action_label.set_hexpand(true);
+    action_label.add_css_class("shortcut-action");
+
+    let combo_label = gtk::Label::new(Some(combo));
+    combo_label.set_halign(Align::End);
+    combo_label.add_css_class("shortcut-combo");
+
+    row.append(&action_label);
+    row.append(&combo_label);
+    row
 }

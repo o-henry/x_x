@@ -16,15 +16,6 @@ pub struct PaneFrame {
     pub body: gtk::Box,
 }
 
-pub struct WorkspaceActionButtons {
-    pub launch_terminal: gtk::Button,
-    pub set_status: gtk::Button,
-    pub clear_status: gtk::Button,
-    pub set_progress: gtk::Button,
-    pub clear_progress: gtk::Button,
-    pub append_log: gtk::Button,
-}
-
 pub struct ShellView {
     pub root: gtk::Box,
     pub chrome_drag_handle: gtk::Box,
@@ -32,7 +23,6 @@ pub struct ShellView {
     pub terminal_button: gtk::Button,
     pub rail_toggle_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
-    pub workspace_actions: WorkspaceActionButtons,
     pub inbox_mark_read_button: Option<gtk::Button>,
 }
 
@@ -146,7 +136,6 @@ pub fn build_shell(
         terminal_button: chrome_view.terminal_button,
         rail_toggle_button: rail_view.toggle_button,
         rail_buttons: rail_view.workspace_buttons,
-        workspace_actions: workspace_view.actions,
         inbox_mark_read_button: inbox_view.mark_read_button,
     }
 }
@@ -154,13 +143,6 @@ pub fn build_shell(
 pub(crate) fn action_button(label: &str) -> gtk::Button {
     let button = gtk::Button::with_label(label);
     button.add_css_class("action-button");
-    button
-}
-
-pub(crate) fn subtle_action_button(label: &str) -> gtk::Button {
-    let button = action_button(label);
-    button.add_css_class("text-only");
-    button.add_css_class("subtle");
     button
 }
 

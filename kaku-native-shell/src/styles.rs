@@ -193,6 +193,25 @@ pub fn install_css() {
           background: transparent;
         }
 
+        .shortcut-legend {
+          margin-top: 4px;
+        }
+
+        .shortcut-line {
+          padding: 2px 0;
+        }
+
+        .shortcut-action, .shortcut-combo {
+          font-family: 'DepartureMono Nerd Font', monospace;
+          font-size: 11px;
+          font-weight: 400;
+          color: #aeb3c3;
+        }
+
+        .shortcut-combo {
+          color: #d7dbea;
+        }
+
         .list-row, .info-row {
           padding: 6px 0;
           border-bottom: 1px solid rgba(255,255,255,0.04);

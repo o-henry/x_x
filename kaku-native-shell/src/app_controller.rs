@@ -90,14 +90,16 @@ impl AppController {
             .build();
         window.add_css_class("native-shell-window");
 
-        Rc::new(Self {
+        let controller = Rc::new(Self {
             window,
             selected_workspace: RefCell::new(None),
             rail_collapsed: Cell::new(false),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),
-        })
+        });
+        controller.install_window_actions(app);
+        controller
     }
 
     pub fn bootstrap(self: &Rc<Self>) {
@@ -210,7 +212,6 @@ impl AppController {
             terminal_button,
             rail_toggle_button,
             rail_buttons,
-            workspace_actions,
             inbox_mark_read_button,
         } = shell;
 
@@ -261,42 +262,6 @@ impl AppController {
                 this.defer(move |controller| controller.select_workspace(&workspace));
             });
         }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.launch_terminal.connect_clicked(move |_| {
-                this.defer(|controller| controller.launch_terminal_window())
-            });
-        }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.set_status.connect_clicked(move |_| {
-                this.defer(|controller| controller.set_status_for_selected())
-            });
-        }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.clear_status.connect_clicked(move |_| {
-                this.defer(|controller| controller.clear_status_for_selected())
-            });
-        }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.set_progress.connect_clicked(move |_| {
-                this.defer(|controller| controller.set_progress_for_selected())
-            });
-        }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.clear_progress.connect_clicked(move |_| {
-                this.defer(|controller| controller.clear_progress_for_selected())
-            });
-        }
-        {
-            let this = Rc::clone(self);
-            workspace_actions.append_log.connect_clicked(move |_| {
-                this.defer(|controller| controller.append_log_for_selected())
-            });
-        }
         if let Some(mark_read_button) = inbox_mark_read_button {
             let this = Rc::clone(self);
             mark_read_button.connect_clicked(move |_| {
@@ -320,6 +285,46 @@ impl AppController {
     fn toggle_rail(self: &Rc<Self>) {
         self.rail_collapsed.set(!self.rail_collapsed.get());
         self.rerender();
+    }
+
+    fn install_window_actions(self: &Rc<Self>, app: &adw::Application) {
+        self.install_action("launch-terminal", {
+            let this = Rc::clone(self);
+            move || this.launch_terminal_window()
+        });
+        self.install_action("set-status", {
+            let this = Rc::clone(self);
+            move || this.set_status_for_selected()
+        });
+        self.install_action("clear-status", {
+            let this = Rc::clone(self);
+            move || this.clear_status_for_selected()
+        });
+        self.install_action("set-progress", {
+            let this = Rc::clone(self);
+            move || this.set_progress_for_selected()
+        });
+        self.install_action("clear-progress", {
+            let this = Rc::clone(self);
+            move || this.clear_progress_for_selected()
+        });
+        self.install_action("append-log", {
+            let this = Rc::clone(self);
+            move || this.append_log_for_selected()
+        });
+
+        app.set_accels_for_action("win.launch-terminal", &["<Meta>t"]);
+        app.set_accels_for_action("win.set-status", &["<Meta><Shift>s"]);
+        app.set_accels_for_action("win.clear-status", &["<Meta><Shift>x"]);
+        app.set_accels_for_action("win.set-progress", &["<Meta><Shift>p"]);
+        app.set_accels_for_action("win.clear-progress", &["<Meta><Shift>r"]);
+        app.set_accels_for_action("win.append-log", &["<Meta><Shift>l"]);
+    }
+
+    fn install_action(self: &Rc<Self>, name: &str, handler: impl Fn() + 'static) {
+        let action = SimpleAction::new(name, None);
+        action.connect_activate(move |_, _| handler());
+        self.window.add_action(&action);
     }
 
     fn set_status_for_selected(self: &Rc<Self>) {
