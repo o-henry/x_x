@@ -1,4 +1,5 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
+use crate::terminal::build_terminal_widget;
 use crate::view::{pane_panel, pill};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
@@ -169,34 +170,10 @@ fn workspace_snapshot_block(snapshot: &RuntimeSnapshot, show_terminal_sessions: 
 
     if show_terminal_sessions {
         block.append(&section_label("TERMINAL SESSIONS"));
-        let panes = snapshot
-            .task_panes
-            .iter()
-            .filter(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
-            .take(4)
-            .collect::<Vec<_>>();
-        if panes.is_empty() {
-            block.append(&detail_line("No live task panes in this workspace"));
-        } else {
-            for pane in panes {
-                let state = if pane.is_failed {
-                    "failed"
-                } else if pane.is_dead {
-                    "dead"
-                } else {
-                    "running"
-                };
-                let cwd = pane
-                    .current_working_dir
-                    .as_deref()
-                    .map(shorten_cwd)
-                    .unwrap_or_else(|| "no cwd".to_string());
-                block.append(&detail_line(&format!(
-                    "pane {}  {}  {}",
-                    pane.pane_id, state, cwd
-                )));
-            }
-        }
+        let terminal_host = build_terminal_widget(current_workspace_raw_cwd(snapshot));
+        terminal_host.set_margin_top(6);
+        terminal_host.set_height_request(220);
+        block.append(&terminal_host);
     }
 
     block
@@ -218,16 +195,20 @@ fn detail_line(text: &str) -> gtk::Label {
 }
 
 fn current_workspace_cwd(snapshot: &RuntimeSnapshot) -> Option<String> {
+    current_workspace_raw_cwd(snapshot).map(|cwd| shorten_cwd(&cwd))
+}
+
+fn current_workspace_raw_cwd(snapshot: &RuntimeSnapshot) -> Option<String> {
     snapshot
         .task_panes
         .iter()
         .find(|row| row.workspace.as_deref() == Some(snapshot.active_workspace.as_str()))
         .and_then(|row| row.current_working_dir.as_ref())
-        .map(|cwd| shorten_cwd(cwd))
+        .cloned()
         .or_else(|| {
             std::env::current_dir()
                 .ok()
-                .and_then(|path| path.to_str().map(shorten_cwd))
+                .and_then(|path| path.to_str().map(|cwd| cwd.to_string()))
         })
 }
 

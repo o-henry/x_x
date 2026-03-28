@@ -5,7 +5,7 @@ pub fn install_css() {
     provider.load_from_data(
         "
         .native-shell-window, .shell-root, window, box {
-          font-family: 'Basically A Mono', '1984대화나눔_본문체_Regular', '1984대화나눔_본문체_Light', '1984대화나눔_본문체_Bold', monospace;
+          font-family: 'DM Mono', '1984대화나눔_본문체_Regular', '1984대화나눔_본문체_Light', '1984대화나눔_본문체_Bold', monospace;
         }
 
         .shell-root {
@@ -283,10 +283,23 @@ pub fn install_css() {
         }
 
         .shortcut-action, .shortcut-combo {
-          font-family: 'DepartureMono Nerd Font', monospace;
+          font-family: 'DM Mono', monospace;
           font-size: 11px;
           font-weight: 400;
           color: #aeb3c3;
+        }
+
+        .terminal-host {
+          background: #0d0f14;
+          border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .terminal-view {
+          background: #0d0f14;
+          color: #e7e9ef;
+          caret-color: #f4f6fb;
+          font-family: 'DM Mono', monospace;
+          font-size: 12px;
         }
 
         .shortcut-combo {

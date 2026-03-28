@@ -16,5 +16,6 @@ adw.workspace = true
 kaku-runtime.workspace = true
 log.workspace = true
 mux.workspace = true
+portable-pty.workspace = true
 wezterm-client.workspace = true
 wezterm-gui-subcommands.workspace = true

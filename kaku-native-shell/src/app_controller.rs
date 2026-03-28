@@ -52,11 +52,7 @@ pub fn shell_ui_contract() -> ShellUiContract {
         primary_surface: "workspace",
         persistent_context_slots: ["inbox", "tasks", "metadata"],
         typography: ShellTypographyContract {
-            primary_mono_family: [
-                "Basically A Mono",
-                "1984대화나눔_본문체_Regular",
-                "monospace",
-            ],
+            primary_mono_family: ["DM Mono", "1984대화나눔_본문체_Regular", "monospace"],
             operator_classes: ["chrome-title", "rail-name", "pane-title"],
         },
         affordances: ShellAffordanceContract {

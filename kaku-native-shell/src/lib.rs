@@ -3,6 +3,7 @@ pub mod app_controller;
 pub mod runtime_bridge;
 pub mod snapshot;
 pub mod styles;
+pub mod terminal;
 pub mod view;
 
 use adw::prelude::*;

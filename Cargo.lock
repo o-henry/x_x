@@ -2944,6 +2944,7 @@ dependencies = [
  "libadwaita",
  "log",
  "mux",
+ "portable-pty",
  "wezterm-client",
  "wezterm-gui-subcommands",
 ]
