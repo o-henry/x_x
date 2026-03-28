@@ -20,6 +20,53 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellTypographyContract {
+    pub primary_mono_family: [&'static str; 3],
+    pub operator_classes: [&'static str; 3],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellAffordanceContract {
+    pub compact_count_labels: [&'static str; 3],
+    pub header_badges: [&'static str; 3],
+    pub action_labels: [&'static str; 7],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellUiContract {
+    pub layout_slots: [&'static str; 6],
+    pub primary_surface: &'static str,
+    pub persistent_context_slots: [&'static str; 3],
+    pub typography: ShellTypographyContract,
+    pub affordances: ShellAffordanceContract,
+}
+
+pub fn shell_ui_contract() -> ShellUiContract {
+    ShellUiContract {
+        layout_slots: ["chrome", "rail", "workspace", "activity", "inbox", "metadata"],
+        primary_surface: "workspace",
+        persistent_context_slots: ["inbox", "tasks", "metadata"],
+        typography: ShellTypographyContract {
+            primary_mono_family: ["DM Mono", "SF Mono", "monospace"],
+            operator_classes: ["chrome-title", "rail-name", "pane-title"],
+        },
+        affordances: ShellAffordanceContract {
+            compact_count_labels: ["1U 2R 0F", "70% 5L", "U1 T2"],
+            header_badges: ["◉ unity-main", "✦ 3U", "↺ 2T"],
+            action_labels: [
+                "↻",
+                "⌂ open terminal",
+                "⌁ status",
+                "⌁ clear",
+                "◔ progress",
+                "◌ clear",
+                "＋ log",
+            ],
+        },
+    }
+}
+
 pub struct AppController {
     pub window: adw::ApplicationWindow,
     selected_workspace: RefCell<Option<String>>,
@@ -177,7 +224,7 @@ impl AppController {
         title.set_halign(Align::Start);
         title.add_css_class("chrome-title");
         let subtitle = gtk::Label::new(Some(&format!(
-            "{} workspaces  {} unread  {} tasks",
+            "{} ws  {}U  {}T",
             snapshot.workspaces.len(),
             snapshot
                 .notifications
@@ -194,14 +241,14 @@ impl AppController {
         let spacer = gtk::Box::new(Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
 
-        let active = gtk::Label::new(Some(&format!("active: {}", snapshot.active_workspace)));
+        let active = gtk::Label::new(Some(&format!("◉ {}", snapshot.active_workspace)));
         active.add_css_class("chrome-pill");
-        let refresh = action_button("Refresh");
+        let refresh = action_button("↻");
         {
             let this = Rc::clone(self);
             refresh.connect_clicked(move |_| this.rerender());
         }
-        let terminal = action_button("Launch Terminal");
+        let terminal = action_button("⌂ open terminal");
         {
             let this = Rc::clone(self);
             terminal.connect_clicked(move |_| this.launch_terminal_window());
@@ -246,7 +293,7 @@ impl AppController {
             name.set_halign(Align::Start);
             name.add_css_class("rail-name");
             let meta = gtk::Label::new(Some(&format!(
-                "{} unread  {} run  {} fail",
+                "{}U {}R {}F",
                 summary.unread_count, summary.running_count, summary.failed_count
             )));
             meta.set_halign(Align::Start);
@@ -255,15 +302,15 @@ impl AppController {
             name_box.append(&meta);
 
             let mut status_bits = Vec::new();
-            if let Some(status) = &summary.status {
-                status_bits.push(status.clone());
-            }
-            if let Some(progress) = summary.progress {
-                status_bits.push(format!("{progress}%"));
-            }
-            if summary.log_count > 0 {
-                status_bits.push(format!("{} logs", summary.log_count));
-            }
+        if let Some(status) = &summary.status {
+            status_bits.push(format!("◉ {status}"));
+        }
+        if let Some(progress) = summary.progress {
+            status_bits.push(format!("◔ {progress}%"));
+        }
+        if summary.log_count > 0 {
+            status_bits.push(format!("✦ {}L", summary.log_count));
+        }
 
             let trailing = gtk::Label::new(Some(&status_bits.join(" · ")));
             trailing.set_halign(Align::End);
@@ -330,7 +377,7 @@ impl AppController {
         title.add_css_class("workspace-title");
 
         let summary = gtk::Label::new(Some(&format!(
-            "{} unread  {} running  {} failed  {} logs",
+            "{}U  {}R  {}F  {}L",
             workspace.unread_count,
             workspace.running_count,
             workspace.failed_count,
@@ -342,44 +389,44 @@ impl AppController {
         let state_row = gtk::Box::new(Orientation::Horizontal, 10);
         state_row.set_halign(Align::Start);
         if let Some(status) = &workspace.status {
-            state_row.append(&pill(&format!("status {}", status)));
+            state_row.append(&pill(&format!("◉ {status}")));
         } else {
-            state_row.append(&pill("status unset"));
+            state_row.append(&pill("◉ unset"));
         }
         if let Some(progress) = workspace.progress {
-            state_row.append(&pill(&format!("progress {}%", progress)));
+            state_row.append(&pill(&format!("◔ {progress}%")));
         } else {
-            state_row.append(&pill("progress unset"));
+            state_row.append(&pill("◔ unset"));
         }
 
         let actions = gtk::Box::new(Orientation::Horizontal, 8);
         actions.set_halign(Align::Start);
-        let launch = action_button("Launch Terminal");
+        let launch = action_button("⌂ open terminal");
         {
             let this = Rc::clone(self);
             launch.connect_clicked(move |_| this.launch_terminal_window());
         }
-        let set_status = action_button("Set Status");
+        let set_status = action_button("⌁ status");
         {
             let this = Rc::clone(self);
             set_status.connect_clicked(move |_| this.set_status_for_selected());
         }
-        let clear_status = action_button("Clear Status");
+        let clear_status = action_button("⌁ clear");
         {
             let this = Rc::clone(self);
             clear_status.connect_clicked(move |_| this.clear_status_for_selected());
         }
-        let set_progress = action_button("Set Progress");
+        let set_progress = action_button("◔ progress");
         {
             let this = Rc::clone(self);
             set_progress.connect_clicked(move |_| this.set_progress_for_selected());
         }
-        let clear_progress = action_button("Clear Progress");
+        let clear_progress = action_button("◌ clear");
         {
             let this = Rc::clone(self);
             clear_progress.connect_clicked(move |_| this.clear_progress_for_selected());
         }
-        let append_log = action_button("Append Log");
+        let append_log = action_button("＋ log");
         {
             let this = Rc::clone(self);
             append_log.connect_clicked(move |_| this.append_log_for_selected());
@@ -421,7 +468,7 @@ impl AppController {
         header_actions.set_margin_start(14);
         header_actions.set_margin_end(14);
         header_actions.set_margin_top(12);
-        let mark_read = action_button("Mark Visible Read");
+        let mark_read = action_button("✓ mark visible");
         {
             let this = Rc::clone(self);
             mark_read.connect_clicked(move |_| this.mark_notifications_read_for_selected());
