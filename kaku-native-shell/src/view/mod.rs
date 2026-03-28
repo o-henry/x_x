@@ -11,6 +11,11 @@ use gtk::prelude::IsA;
 use gtk::prelude::*;
 use gtk::{Align, Orientation, Paned, PolicyType};
 
+pub struct PaneFrame {
+    pub root: gtk::Box,
+    pub body: gtk::Box,
+}
+
 pub struct WorkspaceActionButtons {
     pub launch_terminal: gtk::Button,
     pub set_status: gtk::Button,
@@ -165,31 +170,59 @@ pub(crate) fn chrome_action_button(label: &str) -> gtk::Button {
     button
 }
 
-pub(crate) fn pane_panel(title: &str, subtitle: Option<&str>) -> gtk::Box {
+pub(crate) fn pane_panel(
+    title: &str,
+    subtitle: Option<&str>,
+    header_action: Option<&impl IsA<gtk::Widget>>,
+) -> PaneFrame {
     let panel = gtk::Box::new(Orientation::Vertical, 0);
     panel.add_css_class("pane-panel");
 
-    let header = gtk::Box::new(Orientation::Vertical, 3);
-    header.add_css_class("pane-header");
-    header.set_margin_start(12);
-    header.set_margin_end(12);
-    header.set_margin_top(10);
-    header.set_margin_bottom(10);
+    let header = gtk::Box::new(Orientation::Horizontal, 10);
+    header.add_css_class("pane-titlebar");
+    header.set_hexpand(true);
+
+    let title_stack = gtk::Box::new(Orientation::Vertical, 3);
+    title_stack.add_css_class("pane-header");
+    title_stack.set_hexpand(true);
+    title_stack.set_margin_start(12);
+    title_stack.set_margin_end(12);
+    title_stack.set_margin_top(10);
+    title_stack.set_margin_bottom(10);
 
     let title_label = gtk::Label::new(Some(title));
     title_label.set_halign(Align::Start);
     title_label.add_css_class("pane-title");
-    header.append(&title_label);
+    title_stack.append(&title_label);
 
     if let Some(subtitle) = subtitle {
         let subtitle_label = gtk::Label::new(Some(subtitle));
         subtitle_label.set_halign(Align::Start);
         subtitle_label.add_css_class("pane-subtitle");
-        header.append(&subtitle_label);
+        title_stack.append(&subtitle_label);
+    }
+
+    header.append(&title_stack);
+
+    if let Some(action) = header_action {
+        let action_host = gtk::Box::new(Orientation::Horizontal, 0);
+        action_host.add_css_class("pane-titlebar-action");
+        action_host.set_margin_end(10);
+        action_host.set_margin_top(8);
+        action_host.set_margin_bottom(8);
+        action_host.append(action);
+        header.append(&action_host);
     }
 
     panel.append(&header);
-    panel
+
+    let body = gtk::Box::new(Orientation::Vertical, 0);
+    body.add_css_class("pane-surface");
+    body.set_hexpand(true);
+    body.set_vexpand(true);
+    panel.append(&body);
+
+    PaneFrame { root: panel, body }
 }
 
 pub(crate) fn empty_state(message: &str) -> gtk::Label {

@@ -9,7 +9,8 @@ pub struct InboxPanelView {
 }
 
 pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
-    let panel = pane_panel("Inbox", None);
+    let mark_read = action_button("Mark Read");
+    let frame = pane_panel("Inbox", None, Some(&mark_read));
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
         .notifications
@@ -18,20 +19,14 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
         .cloned()
         .collect::<Vec<_>>();
 
-    let header_actions = gtk::Box::new(Orientation::Horizontal, 8);
-    header_actions.set_margin_start(12);
-    header_actions.set_margin_end(12);
-    header_actions.set_margin_top(10);
-    header_actions.set_margin_bottom(4);
-    let mark_read = action_button("Mark Read");
-    header_actions.append(&mark_read);
-    panel.append(&header_actions);
     let mark_read_button = Some(mark_read);
 
     if unread.is_empty() {
-        panel.append(&empty_state("No unread notifications in this workspace."));
+        frame
+            .body
+            .append(&empty_state("No unread notifications in this workspace."));
         return InboxPanelView {
-            root: panel,
+            root: frame.root,
             mark_read_button,
         };
     }
@@ -47,15 +42,15 @@ pub fn build_inbox_panel(snapshot: &RuntimeSnapshot) -> InboxPanelView {
             &format!("{}  {}", row.kind, row.body.as_deref().unwrap_or("no body")),
         ));
     }
-    panel.append(&scroller(&list));
+    frame.body.append(&scroller(&list));
     InboxPanelView {
-        root: panel,
+        root: frame.root,
         mark_read_button,
     }
 }
 
 pub fn build_task_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
-    let panel = pane_panel("Tasks", None);
+    let frame = pane_panel("Tasks", None, Option::<&gtk::Widget>::None);
     let selected = snapshot.active_workspace.as_str();
     let tasks = snapshot
         .task_panes
@@ -65,8 +60,10 @@ pub fn build_task_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
         .collect::<Vec<_>>();
 
     if tasks.is_empty() {
-        panel.append(&empty_state("No task panes recorded for this workspace."));
-        return panel;
+        frame
+            .body
+            .append(&empty_state("No task panes recorded for this workspace."));
+        return frame.root;
     }
 
     let list = gtk::Box::new(Orientation::Vertical, 6);
@@ -91,12 +88,12 @@ pub fn build_task_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
             list.append(&notification_row("cwd", cwd));
         }
     }
-    panel.append(&scroller(&list));
-    panel
+    frame.body.append(&scroller(&list));
+    frame.root
 }
 
 pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
-    let panel = pane_panel("Metadata", None);
+    let frame = pane_panel("Metadata", None, Option::<&gtk::Widget>::None);
     let selected = snapshot.active_workspace.as_str();
     let status = snapshot
         .statuses
@@ -142,8 +139,8 @@ pub fn build_metadata_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
             .count()
             .to_string(),
     ));
-    panel.append(&body);
-    panel
+    frame.body.append(&body);
+    frame.root
 }
 
 fn notification_row(title_text: &str, detail_text: &str) -> gtk::Box {

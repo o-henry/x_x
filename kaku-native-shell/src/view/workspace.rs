@@ -12,7 +12,10 @@ pub struct WorkspacePanelView {
 
 pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
-    let panel = pane_panel("Workspace", None);
+    let action_menu = gtk::MenuButton::new();
+    action_menu.add_css_class("subtle-control-button");
+    action_menu.set_label("control");
+
     let body = gtk::Box::new(Orientation::Vertical, 14);
     body.add_css_class("pane-body");
     body.add_css_class("pane-content");
@@ -48,9 +51,6 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
         state_row.append(&pill("unset"));
     }
 
-    let actions_row = gtk::Box::new(Orientation::Horizontal, 0);
-    actions_row.set_halign(Align::Start);
-
     let launch_terminal = subtle_action_button("terminal");
     let set_status = subtle_action_button("set status");
     let clear_status = subtle_action_button("clear status");
@@ -80,20 +80,17 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     action_popover.set_has_arrow(false);
     action_popover.set_child(Some(&action_list));
 
-    let action_menu = gtk::MenuButton::new();
-    action_menu.add_css_class("subtle-control-button");
-    action_menu.set_label("control");
     action_menu.set_popover(Some(&action_popover));
-    actions_row.append(&action_menu);
+
+    let frame = pane_panel("Workspace", None, Some(&action_menu));
 
     body.append(&title);
     body.append(&summary);
     body.append(&state_row);
-    body.append(&actions_row);
-    panel.append(&body);
+    frame.body.append(&body);
 
     WorkspacePanelView {
-        root: panel,
+        root: frame.root,
         actions: WorkspaceActionButtons {
             launch_terminal,
             set_status,
@@ -106,10 +103,12 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
 }
 
 pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
-    let panel = pane_panel("Activity", None);
+    let frame = pane_panel("Activity", None, Option::<&gtk::Widget>::None);
     if snapshot.logs.is_empty() {
-        panel.append(&empty_state("No workspace log entries yet."));
-        return panel;
+        frame
+            .body
+            .append(&empty_state("No workspace log entries yet."));
+        return frame.root;
     }
 
     let list = gtk::Box::new(Orientation::Vertical, 8);
@@ -121,8 +120,8 @@ pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
     for row in snapshot.logs.iter().rev().take(12) {
         list.append(&log_row(row.seq, &row.message));
     }
-    panel.append(&scroller(&list));
-    panel
+    frame.body.append(&scroller(&list));
+    frame.root
 }
 
 pub fn workspace_status_tokens(

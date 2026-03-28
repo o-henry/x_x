@@ -95,18 +95,27 @@ pub fn install_css() {
         }
 
         .pane-panel {
-          background: transparent;
-          border: none;
+          background: #111318;
+          border: 1px solid rgba(255,255,255,0.06);
           border-radius: 0;
         }
 
+        .pane-titlebar {
+          background: #171920;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          min-height: 36px;
+        }
+
         .pane-header {
-          border-bottom: 1px solid rgba(255,255,255,0.05);
           background: transparent;
         }
 
         .pane-body {
           background: transparent;
+        }
+
+        .pane-surface {
+          background: #111318;
         }
 
         .workspace-title {
@@ -154,9 +163,9 @@ pub fn install_css() {
           background: transparent;
           border: none;
           border-radius: 0;
-          min-height: 24px;
+          min-height: 22px;
           min-width: 0;
-          padding: 0;
+          padding: 0 2px;
           color: #aeb3c3;
           box-shadow: none;
         }
@@ -190,7 +199,7 @@ pub fn install_css() {
         }
 
         .pane-content {
-          margin-top: 14px;
+          margin-top: 12px;
         }
 
         scrolledwindow scrollbar,
