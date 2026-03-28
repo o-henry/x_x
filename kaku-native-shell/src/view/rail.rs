@@ -13,19 +13,23 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     rail.add_css_class("workspace-rail");
     rail.set_margin_start(0);
     rail.set_margin_end(0);
-    rail.set_margin_top(8);
-    rail.set_margin_bottom(8);
+    rail.set_margin_top(0);
+    rail.set_margin_bottom(0);
 
-    let header = gtk::Box::new(Orientation::Horizontal, 8);
-    header.set_margin_start(14);
-    header.set_margin_end(14);
-    header.set_margin_bottom(6);
+    let header = gtk::Box::new(Orientation::Horizontal, 10);
+    header.add_css_class("pane-titlebar");
+    header.add_css_class("rail-titlebar");
     header.set_halign(Align::Fill);
+    header.set_hexpand(true);
 
     let eyebrow = gtk::Label::new(Some("WORKSPACES"));
     eyebrow.set_halign(Align::Start);
     eyebrow.set_hexpand(true);
-    eyebrow.add_css_class("rail-eyebrow");
+    eyebrow.add_css_class("pane-title");
+    eyebrow.set_margin_start(12);
+    eyebrow.set_margin_end(12);
+    eyebrow.set_margin_top(8);
+    eyebrow.set_margin_bottom(8);
     if collapsed {
         eyebrow.set_visible(false);
     }
@@ -157,19 +161,25 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     toggle_icon.set_pixel_size(11);
     inbox_toggle_button.set_child(Some(&toggle_icon));
 
-    let inbox_header = gtk::Box::new(Orientation::Horizontal, 8);
+    let inbox_header = gtk::Box::new(Orientation::Horizontal, 10);
+    inbox_header.add_css_class("pane-titlebar");
+    inbox_header.add_css_class("rail-titlebar");
     inbox_header.add_css_class("rail-inbox-header");
-    inbox_header.set_margin_start(14);
-    inbox_header.set_margin_end(10);
-    inbox_header.set_margin_top(8);
-    inbox_header.set_margin_bottom(6);
     inbox_header.set_halign(Align::Fill);
+    inbox_header.set_hexpand(true);
 
     let inbox_label = gtk::Label::new(Some("INBOX"));
     inbox_label.set_halign(Align::Start);
     inbox_label.set_hexpand(true);
-    inbox_label.add_css_class("rail-eyebrow");
+    inbox_label.add_css_class("pane-title");
+    inbox_label.set_margin_start(12);
+    inbox_label.set_margin_end(12);
+    inbox_label.set_margin_top(8);
+    inbox_label.set_margin_bottom(8);
     inbox_header.append(&inbox_label);
+    inbox_toggle_button.set_valign(Align::Center);
+    inbox_toggle_button.set_halign(Align::Center);
+    inbox_toggle_button.set_margin_end(10);
     inbox_header.append(&inbox_toggle_button);
     rail.append(&inbox_header);
 

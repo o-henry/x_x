@@ -65,6 +65,11 @@ pub fn install_css() {
           border-right: 1px solid rgba(255,255,255,0.05);
         }
 
+        .rail-titlebar {
+          min-height: 32px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
         .rail-inbox-header {
           border-top: 1px solid rgba(255,255,255,0.05);
         }
