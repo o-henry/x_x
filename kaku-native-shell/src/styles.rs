@@ -57,7 +57,7 @@ pub fn install_css() {
         }
 
         .rail-row {
-          padding: 10px 14px;
+          padding: 12px 16px;
           border-radius: 0;
           background: transparent;
           border: none;
@@ -78,6 +78,20 @@ pub fn install_css() {
         .rail-trailing {
           font-size: 10px;
           color: #94a8db;
+        }
+
+        .rail-toggle {
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          min-width: 18px;
+          min-height: 18px;
+          padding: 0;
+          box-shadow: none;
+        }
+
+        .rail-toggle:hover {
+          background: rgba(255,255,255,0.04);
         }
 
         .pane-panel {

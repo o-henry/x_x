@@ -29,6 +29,7 @@ pub struct RuntimeSnapshot {
 pub struct ShellLayoutContract {
     pub chrome_height: i32,
     pub rail_width: i32,
+    pub collapsed_rail_width: i32,
     pub body_split: i32,
     pub workspace_split: i32,
     pub lower_split: i32,
@@ -39,7 +40,8 @@ impl Default for ShellLayoutContract {
     fn default() -> Self {
         Self {
             chrome_height: 32,
-            rail_width: 196,
+            rail_width: 232,
+            collapsed_rail_width: 72,
             body_split: 920,
             workspace_split: 380,
             lower_split: 660,

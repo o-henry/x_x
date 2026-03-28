@@ -70,6 +70,7 @@ pub fn shell_ui_contract() -> ShellUiContract {
 pub struct AppController {
     pub window: adw::ApplicationWindow,
     selected_workspace: RefCell<Option<String>>,
+    rail_collapsed: Cell<bool>,
     pending_refresh_scopes: Arc<Mutex<Vec<SnapshotRefreshScope>>>,
     runtime_error: RefCell<Option<String>>,
     runtime_online: Cell<bool>,
@@ -88,6 +89,7 @@ impl AppController {
         Rc::new(Self {
             window,
             selected_workspace: RefCell::new(None),
+            rail_collapsed: Cell::new(false),
             pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),
@@ -116,7 +118,11 @@ impl AppController {
 
     pub fn rerender(self: &Rc<Self>) {
         let snapshot = self.snapshot();
-        let shell = build_shell(&snapshot, &ShellLayoutContract::default());
+        let shell = build_shell(
+            &snapshot,
+            &ShellLayoutContract::default(),
+            self.rail_collapsed.get(),
+        );
         self.bind_shell_view(shell);
     }
 
@@ -197,6 +203,7 @@ impl AppController {
             root,
             refresh_button,
             terminal_button,
+            rail_toggle_button,
             rail_buttons,
             workspace_actions,
             inbox_mark_read_button,
@@ -211,6 +218,11 @@ impl AppController {
             terminal_button.connect_clicked(move |_| {
                 this.defer(|controller| controller.launch_terminal_window())
             });
+        }
+        {
+            let this = Rc::clone(self);
+            rail_toggle_button
+                .connect_clicked(move |_| this.defer(|controller| controller.toggle_rail()));
         }
         for (workspace, button) in rail_buttons {
             let this = Rc::clone(self);
@@ -272,6 +284,11 @@ impl AppController {
         let mux = Mux::get();
         mux.set_active_workspace(workspace);
         self.selected_workspace.replace(Some(workspace.to_string()));
+        self.rerender();
+    }
+
+    fn toggle_rail(self: &Rc<Self>) {
+        self.rail_collapsed.set(!self.rail_collapsed.get());
         self.rerender();
     }
 

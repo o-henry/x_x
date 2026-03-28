@@ -24,6 +24,7 @@ pub struct ShellView {
     pub root: gtk::Box,
     pub refresh_button: gtk::Button,
     pub terminal_button: gtk::Button,
+    pub rail_toggle_button: gtk::Button,
     pub rail_buttons: Vec<(String, gtk::Button)>,
     pub workspace_actions: WorkspaceActionButtons,
     pub inbox_mark_read_button: Option<gtk::Button>,
@@ -45,7 +46,11 @@ pub fn context_panel_titles() -> [&'static str; 4] {
     ["Inbox", "Tasks", "Activity", "Metadata"]
 }
 
-pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> ShellView {
+pub fn build_shell(
+    snapshot: &RuntimeSnapshot,
+    layout: &ShellLayoutContract,
+    rail_collapsed: bool,
+) -> ShellView {
     let root = gtk::Box::new(Orientation::Vertical, 0);
     root.add_css_class("shell-root");
 
@@ -57,10 +62,15 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
     body.set_vexpand(true);
     body.add_css_class("shell-body");
 
-    let rail_view = rail::build_rail(snapshot);
-    rail_view
-        .root
-        .set_size_request(188.min(layout.rail_width), -1);
+    let rail_view = rail::build_rail(snapshot, rail_collapsed);
+    rail_view.root.set_size_request(
+        if rail_collapsed {
+            layout.collapsed_rail_width
+        } else {
+            208.max(layout.rail_width)
+        },
+        -1,
+    );
     rail_view.root.set_hexpand(false);
     rail_view.root.set_halign(Align::Start);
     rail_view.root.set_vexpand(true);
@@ -127,6 +137,7 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
         root,
         refresh_button: chrome_view.refresh_button,
         terminal_button: chrome_view.terminal_button,
+        rail_toggle_button: rail_view.toggle_button,
         rail_buttons: rail_view.workspace_buttons,
         workspace_actions: workspace_view.actions,
         inbox_mark_read_button: inbox_view.mark_read_button,
