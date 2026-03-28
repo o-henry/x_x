@@ -1,6 +1,7 @@
 use kaku_native_shell::actions::{
     ShellAction, ShellActionContext, ShellActionOutcome, ShellActionTarget,
 };
+use mux::Mux;
 use std::cell::RefCell;
 
 #[derive(Default)]
@@ -93,7 +94,7 @@ fn shell_action_mutations() {
 
 #[test]
 fn shell_metadata_actions() {
-    let target = RecordingTarget::default();
+    let mux = Mux::new(None);
     let context = ShellActionContext {
         workspace: "unity-main".to_string(),
         current_status: Some("Building".to_string()),
@@ -103,29 +104,45 @@ fn shell_metadata_actions() {
     };
 
     assert_eq!(
-        ShellAction::SetStatus.execute(&target, &context),
+        ShellAction::SetStatus.execute(&mux, &context),
         ShellActionOutcome::Mutated
     );
     assert_eq!(
-        ShellAction::ClearStatus.execute(&target, &context),
-        ShellActionOutcome::Mutated
-    );
-    assert_eq!(
-        ShellAction::SetProgress.execute(&target, &context),
-        ShellActionOutcome::Mutated
-    );
-    assert_eq!(
-        ShellAction::ClearProgress.execute(&target, &context),
-        ShellActionOutcome::Mutated
+        mux.workspace_status_for_workspace("unity-main")
+            .map(|record| record.status),
+        Some("Reviewing".to_string())
     );
 
     assert_eq!(
-        target.take_calls(),
-        vec![
-            "set-status:unity-main:Reviewing".to_string(),
-            "clear-status:unity-main".to_string(),
-            "set-progress:unity-main:70".to_string(),
-            "clear-progress:unity-main".to_string(),
-        ]
+        ShellAction::SetProgress.execute(&mux, &context),
+        ShellActionOutcome::Mutated
     );
+    assert_eq!(
+        mux.workspace_progress_for_workspace("unity-main")
+            .map(|record| record.value),
+        Some(70)
+    );
+
+    assert_eq!(
+        ShellAction::AppendLog.execute(&mux, &context),
+        ShellActionOutcome::Mutated
+    );
+    assert_eq!(
+        mux.list_workspace_log("unity-main")
+            .last()
+            .map(|record| record.message.clone()),
+        Some("native-shell check-in 100".to_string())
+    );
+
+    assert_eq!(
+        ShellAction::ClearStatus.execute(&mux, &context),
+        ShellActionOutcome::Mutated
+    );
+    assert_eq!(mux.workspace_status_for_workspace("unity-main"), None);
+
+    assert_eq!(
+        ShellAction::ClearProgress.execute(&mux, &context),
+        ShellActionOutcome::Mutated
+    );
+    assert_eq!(mux.workspace_progress_for_workspace("unity-main"), None);
 }

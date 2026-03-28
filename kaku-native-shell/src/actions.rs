@@ -1,3 +1,4 @@
+use mux::Mux;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -131,4 +132,30 @@ pub trait ShellActionTarget {
     fn clear_workspace_progress(&self, workspace: &str);
     fn append_workspace_log(&self, workspace: &str, message: &str);
     fn mark_notifications_read(&self, notification_ids: &[String]);
+}
+
+impl ShellActionTarget for Mux {
+    fn set_workspace_status(&self, workspace: &str, status: &str) {
+        let _ = Mux::set_workspace_status(self, workspace, status);
+    }
+
+    fn clear_workspace_status(&self, workspace: &str) {
+        let _ = Mux::clear_workspace_status(self, workspace);
+    }
+
+    fn set_workspace_progress(&self, workspace: &str, value: u8) {
+        let _ = Mux::set_workspace_progress(self, workspace, value);
+    }
+
+    fn clear_workspace_progress(&self, workspace: &str) {
+        let _ = Mux::clear_workspace_progress(self, workspace);
+    }
+
+    fn append_workspace_log(&self, workspace: &str, message: &str) {
+        let _ = Mux::append_workspace_log(self, workspace, message);
+    }
+
+    fn mark_notifications_read(&self, notification_ids: &[String]) {
+        let _ = Mux::mark_notifications_read(self, notification_ids);
+    }
 }

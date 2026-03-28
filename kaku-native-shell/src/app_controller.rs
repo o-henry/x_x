@@ -1,3 +1,4 @@
+use crate::actions::{ShellAction, ShellActionContext, ShellActionOutcome};
 use crate::runtime_bridge::{bootstrap_native_shell_runtime, NativeShellBootstrapPlan};
 use crate::snapshot::{
     derive_runtime_snapshot, refresh_scope_for_notification, RuntimeSnapshot, ShellLayoutContract,
@@ -18,33 +19,6 @@ use std::process::Command;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ShellAction {
-    Refresh,
-    LaunchTerminal,
-    SetStatus,
-    ClearStatus,
-    SetProgress,
-    ClearProgress,
-    AppendLog,
-    MarkVisibleRead,
-}
-
-impl ShellAction {
-    pub fn operator_actions() -> Vec<Self> {
-        vec![
-            Self::Refresh,
-            Self::LaunchTerminal,
-            Self::SetStatus,
-            Self::ClearStatus,
-            Self::SetProgress,
-            Self::ClearProgress,
-            Self::AppendLog,
-            Self::MarkVisibleRead,
-        ]
-    }
-}
 
 pub struct AppController {
     pub window: adw::ApplicationWindow,
@@ -578,88 +552,30 @@ impl AppController {
     }
 
     fn set_status_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        let workspace = self.selected_workspace_name();
-        let mux = Mux::get();
-        let next = match mux.workspace_status_for_workspace(&workspace) {
-            Some(record) if record.status == "Planning" => "Building",
-            Some(record) if record.status == "Building" => "Reviewing",
-            Some(record) if record.status == "Reviewing" => "Blocked",
-            _ => "Planning",
-        };
-        mux.set_workspace_status(&workspace, next);
-        self.rerender();
+        self.apply_action(ShellAction::SetStatus);
     }
 
     fn clear_status_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        let workspace = self.selected_workspace_name();
-        Mux::get().clear_workspace_status(&workspace);
-        self.rerender();
+        self.apply_action(ShellAction::ClearStatus);
     }
 
     fn set_progress_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        let workspace = self.selected_workspace_name();
-        let mux = Mux::get();
-        let current = mux
-            .workspace_progress_for_workspace(&workspace)
-            .map(|record| record.value)
-            .unwrap_or(0);
-        let next = match current {
-            0..=24 => 35,
-            25..=64 => 70,
-            65..=99 => 100,
-            _ => 15,
-        };
-        let _ = mux.set_workspace_progress(&workspace, next);
-        self.rerender();
+        self.apply_action(ShellAction::SetProgress);
     }
 
     fn clear_progress_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        let workspace = self.selected_workspace_name();
-        Mux::get().clear_workspace_progress(&workspace);
-        self.rerender();
+        self.apply_action(ShellAction::ClearProgress);
     }
 
     fn append_log_for_selected(self: &Rc<Self>) {
-        if !self.runtime_online.get() {
-            return;
-        }
-        let workspace = self.selected_workspace_name();
-        let secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let message = format!("native-shell check-in {secs}");
-        Mux::get().append_workspace_log(&workspace, &message);
-        self.rerender();
+        self.apply_action(ShellAction::AppendLog);
     }
 
     fn mark_notifications_read_for_selected(self: &Rc<Self>) {
         if !self.runtime_online.get() {
             return;
         }
-        let workspace = self.selected_workspace_name();
-        let ids = Mux::get()
-            .list_notifications()
-            .into_iter()
-            .filter(|row| row.workspace == workspace && row.unread)
-            .map(|row| row.notification_id)
-            .collect::<Vec<_>>();
-        if !ids.is_empty() {
-            Mux::get().mark_notifications_read(&ids);
-        }
-        self.rerender();
+        self.apply_action(ShellAction::MarkVisibleRead);
     }
 
     fn launch_terminal_window(self: &Rc<Self>) {
@@ -691,6 +607,46 @@ impl AppController {
             .borrow()
             .clone()
             .unwrap_or_else(|| "default".to_string())
+    }
+
+    fn apply_action(self: &Rc<Self>, action: ShellAction) {
+        if !self.runtime_online.get() {
+            return;
+        }
+        let mux = Mux::get();
+        let context = self.action_context(mux.as_ref());
+        if matches!(action.execute(mux.as_ref(), &context), ShellActionOutcome::NoMutation)
+            && matches!(action, ShellAction::Refresh)
+        {
+            self.rerender();
+        }
+    }
+
+    fn action_context(&self, mux: &Mux) -> ShellActionContext {
+        let workspace = self.selected_workspace_name();
+        let current_status = mux
+            .workspace_status_for_workspace(&workspace)
+            .map(|record| record.status);
+        let current_progress = mux
+            .workspace_progress_for_workspace(&workspace)
+            .map(|record| record.value);
+        let visible_notification_ids = mux
+            .list_notifications()
+            .into_iter()
+            .filter(|row| row.workspace == workspace && row.unread)
+            .map(|row| row.notification_id)
+            .collect::<Vec<_>>();
+        let unix_timestamp_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        ShellActionContext {
+            workspace,
+            current_status,
+            current_progress,
+            visible_notification_ids,
+            unix_timestamp_secs,
+        }
     }
 }
 
