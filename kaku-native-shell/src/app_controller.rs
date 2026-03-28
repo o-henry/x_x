@@ -140,6 +140,7 @@ impl AppController {
                 tasks_first: self.tasks_first.get(),
                 show_terminal_sessions: self.show_terminal_sessions.get(),
             },
+            width,
         );
         self.bind_shell_view(shell);
     }
