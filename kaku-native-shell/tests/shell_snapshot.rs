@@ -4,6 +4,9 @@ use kaku_native_shell::snapshot::{
     refresh_scope_for_notification, RuntimeSnapshot, RuntimeSnapshotSource, ShellLayoutContract,
     SnapshotRefreshScope, WorkspaceSummary,
 };
+use kaku_native_shell::view::{
+    context_panel_titles, shell_slot_order, workspace_badge_text, workspace_status_tokens,
+};
 use mux::client::ClientId;
 use mux::notification_store::{NotificationRecord, NotificationUnreadMode};
 use mux::pane::PaneId;
@@ -41,6 +44,11 @@ fn shell_layout_contract() {
     assert!(contract.layout_slots.contains(&"chrome"));
     assert!(contract.layout_slots.contains(&"rail"));
     assert!(contract.layout_slots.contains(&"activity"));
+    assert_eq!(
+        shell_slot_order(),
+        ["chrome", "rail", "workspace", "activity", "metadata", "inbox", "tasks"]
+    );
+    assert_eq!(context_panel_titles(), ["Inbox", "Tasks", "Activity", "Metadata"]);
 }
 
 #[test]
@@ -85,6 +93,8 @@ fn shell_affordance_contract() {
         .affordances
         .action_labels
         .contains(&"⌂ open terminal"));
+    assert_eq!(workspace_badge_text(1, 2, 0), "1U 2R 0F");
+    assert_eq!(workspace_status_tokens(Some("Building"), Some(70), 5), ["◉ Building", "◔ 70%", "✦ 5L"]);
 }
 
 #[derive(Clone, Default)]
