@@ -42,10 +42,10 @@ impl Default for ShellLayoutContract {
             chrome_height: 28,
             rail_width: 284,
             collapsed_rail_width: 84,
-            body_split: 972,
+            body_split: 872,
             workspace_split: 356,
-            lower_split: 566,
-            side_split: 292,
+            lower_split: 618,
+            side_split: 248,
         }
     }
 }

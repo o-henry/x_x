@@ -78,15 +78,15 @@ pub fn build_shell(
     body.set_vexpand(true);
     body.add_css_class("shell-body");
 
+    let rail_width = if rail_collapsed {
+        layout.collapsed_rail_width
+    } else {
+        layout.rail_width
+    };
+    let reclaimed_width = layout.rail_width - layout.collapsed_rail_width;
+
     let rail_view = rail::build_rail(snapshot, rail_collapsed);
-    rail_view.root.set_size_request(
-        if rail_collapsed {
-            layout.collapsed_rail_width
-        } else {
-            layout.rail_width
-        },
-        -1,
-    );
+    rail_view.root.set_size_request(rail_width, -1);
     rail_view.root.set_hexpand(false);
     rail_view.root.set_halign(Align::Start);
     rail_view.root.set_vexpand(true);
@@ -142,11 +142,18 @@ pub fn build_shell(
     center_column.set_start_child(Some(&workspace_view.root));
     center_column.set_end_child(Some(&lower_center));
 
-    let side_column = gtk::Box::new(Orientation::Vertical, 0);
+    let side_column = gtk::Paned::new(Orientation::Vertical);
+    side_column.add_css_class("shell-split");
     side_column.add_css_class("side-column");
+    side_column.set_wide_handle(true);
+    side_column.set_resize_start_child(true);
+    side_column.set_resize_end_child(true);
+    side_column.set_shrink_start_child(false);
+    side_column.set_shrink_end_child(false);
     side_column.set_hexpand(false);
     side_column.set_halign(Align::End);
     side_column.set_vexpand(true);
+    side_column.set_position(350);
     let inbox_view = context::build_inbox_panel(snapshot);
     let task_view = context::build_task_panel(snapshot);
     inbox_view.root.set_vexpand(true);
@@ -156,11 +163,11 @@ pub fn build_shell(
     task_view.root.set_hexpand(true);
     task_view.root.set_size_request(layout.side_split, 180);
     if arrangement.tasks_first {
-        side_column.append(&task_view.root);
-        side_column.append(&inbox_view.root);
+        side_column.set_start_child(Some(&task_view.root));
+        side_column.set_end_child(Some(&inbox_view.root));
     } else {
-        side_column.append(&inbox_view.root);
-        side_column.append(&task_view.root);
+        side_column.set_start_child(Some(&inbox_view.root));
+        side_column.set_end_child(Some(&task_view.root));
     }
 
     let side_host = gtk::Box::new(Orientation::Horizontal, 0);
@@ -178,7 +185,7 @@ pub fn build_shell(
     body_split.set_resize_end_child(false);
     body_split.set_shrink_start_child(false);
     body_split.set_shrink_end_child(false);
-    body_split.set_position(layout.body_split);
+    body_split.set_position(layout.body_split + if rail_collapsed { reclaimed_width } else { 0 });
     if arrangement.compact {
         let compact_stack = gtk::Box::new(Orientation::Vertical, 12);
         compact_stack.add_css_class("compact-stack");

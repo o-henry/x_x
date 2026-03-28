@@ -127,7 +127,8 @@ pub fn install_css() {
 
         .pane-titlebar.drop-target,
         .pane-surface.drop-target {
-          background: #1c2028;
+          background: #202733;
+          border-color: rgba(122,161,255,0.28);
         }
 
         .pane-header {
