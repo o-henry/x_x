@@ -50,7 +50,11 @@ pub fn shell_ui_contract() -> ShellUiContract {
         primary_surface: "workspace",
         persistent_context_slots: ["inbox", "tasks", "metadata"],
         typography: ShellTypographyContract {
-            primary_mono_family: ["DM Mono", "SF Mono", "monospace"],
+            primary_mono_family: [
+                "DepartureMono Nerd Font",
+                "1984대화나눔_본문체_Regular",
+                "monospace",
+            ],
             operator_classes: ["chrome-title", "rail-name", "pane-title"],
         },
         affordances: ShellAffordanceContract {
@@ -334,15 +338,35 @@ impl AppController {
         if !self.runtime_online.get() {
             return;
         }
-        let mux = Mux::get();
-        let context = self.action_context(mux.as_ref());
-        match action.execute(mux.as_ref(), &context) {
-            ShellActionOutcome::Mutated => self.rerender(),
-            ShellActionOutcome::NoMutation if matches!(action, ShellAction::Refresh) => {
-                self.rerender();
+        let context = {
+            let mux = Mux::get();
+            self.action_context(mux.as_ref())
+        };
+        let pending_refresh_scopes = Arc::clone(&self.pending_refresh_scopes);
+        let main_context = glib::MainContext::default();
+        let window_weak = glib::SendWeakRef::from(self.window.downgrade());
+
+        std::thread::spawn(move || {
+            let mux = Mux::get();
+            let outcome = action.execute(mux.as_ref(), &context);
+            let should_refresh = matches!(outcome, ShellActionOutcome::Mutated)
+                || matches!(action, ShellAction::Refresh);
+            if should_refresh {
+                pending_refresh_scopes
+                    .lock()
+                    .expect("refresh queue")
+                    .push(SnapshotRefreshScope::WorkspaceContext);
+                main_context.invoke(move || {
+                    if let Some(window) = window_weak.upgrade() {
+                        let _ = gtk::prelude::WidgetExt::activate_action(
+                            &window,
+                            "win.refresh-from-mux",
+                            None,
+                        );
+                    }
+                });
             }
-            ShellActionOutcome::NoMutation => {}
-        }
+        });
     }
 
     fn action_context(&self, mux: &Mux) -> ShellActionContext {

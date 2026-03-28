@@ -5,7 +5,7 @@ pub fn install_css() {
     provider.load_from_data(
         "
         .native-shell-window, .shell-root, window, box {
-          font-family: 'DM Mono', 'SF Mono', monospace;
+          font-family: 'DepartureMono Nerd Font', '1984대화나눔_본문체_Regular', '1984대화나눔_본문체_Light', '1984대화나눔_본문체_Bold', monospace;
         }
 
         .shell-root {
@@ -15,6 +15,16 @@ pub fn install_css() {
 
         .shell-body {
           background: #101116;
+        }
+
+        .shell-split separator {
+          background: rgba(255,255,255,0.05);
+          min-width: 1px;
+          min-height: 1px;
+        }
+
+        .shell-split separator:hover {
+          background: rgba(122,161,255,0.32);
         }
 
         .shell-chrome {

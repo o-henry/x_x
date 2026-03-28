@@ -70,7 +70,11 @@ fn shell_typography_contract() {
     let contract = shell_ui_contract();
     assert_eq!(
         contract.typography.primary_mono_family,
-        ["DM Mono", "SF Mono", "monospace"]
+        [
+            "DepartureMono Nerd Font",
+            "1984대화나눔_본문체_Regular",
+            "monospace"
+        ]
     );
     assert!(contract
         .typography
