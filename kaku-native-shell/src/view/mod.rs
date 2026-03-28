@@ -58,35 +58,51 @@ pub fn build_shell(snapshot: &RuntimeSnapshot, layout: &ShellLayoutContract) -> 
     body.add_css_class("shell-body");
 
     let rail_view = rail::build_rail(snapshot);
-    rail_view.root.set_width_request(layout.rail_width);
+    rail_view
+        .root
+        .set_size_request(168.min(layout.rail_width), -1);
+    rail_view.root.set_hexpand(false);
+    rail_view.root.set_halign(Align::Start);
+    rail_view.root.set_vexpand(true);
     body.append(&rail_view.root);
 
-    let center_column = gtk::Paned::new(Orientation::Vertical);
-    center_column.set_position(430);
-
-    let lower_center = gtk::Paned::new(Orientation::Horizontal);
-    lower_center.set_position(560);
+    let center_column = gtk::Box::new(Orientation::Vertical, 0);
+    center_column.set_hexpand(true);
+    center_column.set_vexpand(true);
 
     let workspace_view = workspace::build_workspace_panel(snapshot);
+    workspace_view.root.set_hexpand(true);
+    workspace_view.root.set_vexpand(true);
     let activity_panel = workspace::build_activity_panel(snapshot);
     let metadata_panel = context::build_metadata_panel(snapshot);
-    lower_center.set_start_child(Some(&activity_panel));
-    lower_center.set_end_child(Some(&metadata_panel));
-    center_column.set_start_child(Some(&workspace_view.root));
-    center_column.set_end_child(Some(&lower_center));
+    activity_panel.set_hexpand(true);
+    activity_panel.set_vexpand(true);
+    metadata_panel.set_width_request(260);
+    metadata_panel.set_hexpand(false);
+    metadata_panel.set_vexpand(true);
 
-    let side_column = gtk::Paned::new(Orientation::Vertical);
-    side_column.set_position(320);
+    let lower_center = gtk::Box::new(Orientation::Horizontal, 0);
+    lower_center.set_height_request(250);
+    lower_center.append(&activity_panel);
+    lower_center.append(&metadata_panel);
+
+    center_column.append(&workspace_view.root);
+    center_column.append(&lower_center);
+
+    let side_column = gtk::Box::new(Orientation::Vertical, 0);
+    side_column.set_size_request(240, -1);
+    side_column.set_hexpand(false);
+    side_column.set_halign(Align::End);
+    side_column.set_vexpand(true);
     let inbox_view = context::build_inbox_panel(snapshot);
     let task_panel = context::build_task_panel(snapshot);
-    side_column.set_start_child(Some(&inbox_view.root));
-    side_column.set_end_child(Some(&task_panel));
+    inbox_view.root.set_vexpand(true);
+    task_panel.set_vexpand(true);
+    side_column.append(&inbox_view.root);
+    side_column.append(&task_panel);
 
-    let outer = gtk::Paned::new(Orientation::Horizontal);
-    outer.set_position(910);
-    outer.set_start_child(Some(&center_column));
-    outer.set_end_child(Some(&side_column));
-    body.append(&outer);
+    body.append(&center_column);
+    body.append(&side_column);
 
     root.append(&body);
 
@@ -112,10 +128,10 @@ pub(crate) fn pane_panel(title: &str, subtitle: Option<&str>) -> gtk::Box {
 
     let header = gtk::Box::new(Orientation::Vertical, 3);
     header.add_css_class("pane-header");
-    header.set_margin_start(14);
-    header.set_margin_end(14);
-    header.set_margin_top(12);
-    header.set_margin_bottom(10);
+    header.set_margin_start(12);
+    header.set_margin_end(12);
+    header.set_margin_top(8);
+    header.set_margin_bottom(8);
 
     let title_label = gtk::Label::new(Some(title));
     title_label.set_halign(Align::Start);
@@ -148,7 +164,8 @@ pub(crate) fn empty_state(message: &str) -> gtk::Label {
 pub(crate) fn scroller(child: &impl IsA<gtk::Widget>) -> gtk::ScrolledWindow {
     gtk::ScrolledWindow::builder()
         .hscrollbar_policy(PolicyType::Never)
-        .vscrollbar_policy(PolicyType::Automatic)
+        .vscrollbar_policy(PolicyType::External)
+        .has_frame(false)
         .child(child)
         .build()
 }

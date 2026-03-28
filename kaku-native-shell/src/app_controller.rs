@@ -55,15 +55,9 @@ pub fn shell_ui_contract() -> ShellUiContract {
         },
         affordances: ShellAffordanceContract {
             compact_count_labels: ["1U 2R 0F", "70% 5L", "U1 T2"],
-            header_badges: ["◉ unity-main", "✦ 3U", "↺ 2T"],
+            header_badges: ["◉ unity-main", "3U", "2T"],
             action_labels: [
-                "↻",
-                "⌂ open terminal",
-                "⌁ status",
-                "⌁ clear",
-                "◔ progress",
-                "◌ clear",
-                "＋ log",
+                "↻", "terminal", "status", "clear", "progress", "clear", "log",
             ],
         },
     }

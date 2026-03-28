@@ -1,24 +1,27 @@
 use crate::snapshot::RuntimeSnapshot;
-use crate::view::{scroller, workspace::workspace_status_tokens};
+use crate::view::workspace::workspace_status_tokens;
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
 pub struct RailView {
-    pub root: gtk::ScrolledWindow,
+    pub root: gtk::Box,
     pub workspace_buttons: Vec<(String, gtk::Button)>,
 }
 
 pub fn build_rail(snapshot: &RuntimeSnapshot) -> RailView {
-    let rail = gtk::Box::new(Orientation::Vertical, 6);
+    let rail = gtk::Box::new(Orientation::Vertical, 4);
     rail.add_css_class("workspace-rail");
-    rail.set_margin_start(12);
-    rail.set_margin_end(10);
-    rail.set_margin_top(16);
-    rail.set_margin_bottom(16);
+    rail.set_margin_start(0);
+    rail.set_margin_end(0);
+    rail.set_margin_top(10);
+    rail.set_margin_bottom(10);
 
     let eyebrow = gtk::Label::new(Some("WORKSPACES"));
     eyebrow.set_halign(Align::Start);
     eyebrow.add_css_class("rail-eyebrow");
+    eyebrow.set_margin_start(10);
+    eyebrow.set_margin_end(10);
+    eyebrow.set_margin_bottom(6);
     rail.append(&eyebrow);
 
     let mut workspace_buttons = Vec::new();
@@ -71,7 +74,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot) -> RailView {
     }
 
     RailView {
-        root: scroller(&rail),
+        root: rail,
         workspace_buttons,
     }
 }

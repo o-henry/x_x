@@ -10,15 +10,15 @@ pub struct ChromeView {
 }
 
 pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
-    let chrome = gtk::Box::new(Orientation::Horizontal, 12);
+    let chrome = gtk::Box::new(Orientation::Horizontal, 10);
     chrome.add_css_class("shell-chrome");
-    chrome.set_margin_start(14);
-    chrome.set_margin_end(16);
-    chrome.set_margin_top(10);
-    chrome.set_margin_bottom(8);
+    chrome.set_margin_start(10);
+    chrome.set_margin_end(10);
+    chrome.set_margin_top(6);
+    chrome.set_margin_bottom(6);
 
     let title_box = gtk::Box::new(Orientation::Vertical, 2);
-    let title = gtk::Label::new(Some("Kaku Native Shell"));
+    let title = gtk::Label::new(Some("Kaku"));
     title.set_halign(Align::Start);
     title.add_css_class("chrome-title");
 
@@ -44,7 +44,7 @@ pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     active.add_css_class("chrome-pill");
 
     let refresh_button = action_button("↻");
-    let terminal_button = action_button("⌂ open terminal");
+    let terminal_button = action_button("terminal");
 
     chrome.append(&title_box);
     chrome.append(&spacer);

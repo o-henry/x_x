@@ -9,92 +9,114 @@ pub fn install_css() {
         }
 
         .shell-root {
-          background: #111116;
+          background: #101116;
           color: #d8d8dc;
         }
 
+        .shell-body {
+          background: #101116;
+        }
+
         .shell-chrome {
-          background: #17171d;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
+          background: #14151a;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         .chrome-title {
-          font-size: 14px;
-          font-weight: 700;
+          font-size: 13px;
+          font-weight: 600;
           color: #f2f2f5;
         }
 
         .chrome-subtitle, .pane-subtitle, .rail-eyebrow, .rail-meta, .row-detail, .workspace-summary, .workspace-hint, .info-label, .empty-state {
-          font-size: 11px;
+          font-size: 10px;
           color: #8d8e99;
         }
 
         .chrome-pill {
-          padding: 4px 8px;
-          background: #202029;
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 999px;
-          color: #d8d8dc;
+          padding: 0;
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          color: #b9bcc8;
         }
 
         .workspace-rail {
-          background: #15161c;
-          border-right: 1px solid rgba(255,255,255,0.06);
+          background: #121318;
+          border-right: 1px solid rgba(255,255,255,0.05);
         }
 
         .rail-row {
-          padding: 10px 12px;
-          border-radius: 10px;
+          padding: 8px 10px;
+          border-radius: 0;
           background: transparent;
-          border: 1px solid transparent;
+          border: none;
+          border-left: 1px solid transparent;
         }
 
         .rail-row.active {
-          background: #222530;
-          border-color: rgba(122, 161, 255, 0.18);
+          background: rgba(255,255,255,0.03);
+          border-left-color: rgba(122, 161, 255, 0.7);
         }
 
         .rail-name, .pane-title, .row-title, .workspace-title, .info-value {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: #f1f1f5;
         }
 
         .rail-trailing {
           font-size: 10px;
-          color: #7aa1ff;
+          color: #94a8db;
         }
 
         .pane-panel {
-          background: #15161c;
-          border: 1px solid rgba(255,255,255,0.06);
+          background: transparent;
+          border: none;
           border-radius: 0;
         }
 
         .pane-header {
           border-bottom: 1px solid rgba(255,255,255,0.05);
-          background: #171920;
+          background: transparent;
         }
 
         .pane-body {
-          background: #13141a;
+          background: transparent;
         }
 
         .workspace-title {
-          font-size: 18px;
+          font-size: 17px;
         }
 
         .action-button {
-          background: #202532;
-          color: #e8e9ef;
-          border-radius: 10px;
-          border: 1px solid rgba(255,255,255,0.08);
-          padding: 6px 10px;
+          background: rgba(255,255,255,0.03);
+          color: #cfd3df;
+          border-radius: 0;
+          border: 1px solid rgba(255,255,255,0.05);
+          padding: 4px 8px;
+          box-shadow: none;
         }
 
         .list-row, .info-row {
-          padding: 8px 0;
+          padding: 6px 0;
           border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        scrolledwindow scrollbar,
+        scrolledwindow scrollbar slider {
+          min-width: 0;
+          min-height: 0;
+          background: transparent;
+          border: none;
+          box-shadow: none;
+        }
+
+        scrolledwindow scrollbar slider {
+          min-width: 3px;
+          min-height: 3px;
+          background: rgba(255,255,255,0.08);
+          border-radius: 0;
         }
         ",
     );

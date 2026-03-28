@@ -1,8 +1,5 @@
 use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
-use crate::view::{
-    action_button, context_panel_titles, empty_state, pane_panel, pill, scroller,
-    WorkspaceActionButtons,
-};
+use crate::view::{action_button, empty_state, pane_panel, pill, scroller, WorkspaceActionButtons};
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
 
@@ -13,13 +10,13 @@ pub struct WorkspacePanelView {
 
 pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     let workspace = current_workspace_summary(snapshot);
-    let panel = pane_panel("Workspace", Some("Active Kaku workspace state"));
-    let body = gtk::Box::new(Orientation::Vertical, 14);
+    let panel = pane_panel("Workspace", None);
+    let body = gtk::Box::new(Orientation::Vertical, 12);
     body.add_css_class("pane-body");
-    body.set_margin_start(18);
-    body.set_margin_end(18);
-    body.set_margin_top(18);
-    body.set_margin_bottom(18);
+    body.set_margin_start(14);
+    body.set_margin_end(14);
+    body.set_margin_top(14);
+    body.set_margin_bottom(14);
 
     let title = gtk::Label::new(Some(&workspace.name));
     title.set_halign(Align::Start);
@@ -35,27 +32,27 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
     summary.set_halign(Align::Start);
     summary.add_css_class("workspace-summary");
 
-    let state_row = gtk::Box::new(Orientation::Horizontal, 10);
+    let state_row = gtk::Box::new(Orientation::Horizontal, 8);
     state_row.set_halign(Align::Start);
     if let Some(status) = &workspace.status {
-        state_row.append(&pill(&format!("◉ {status}")));
+        state_row.append(&pill(status));
     } else {
-        state_row.append(&pill("◉ unset"));
+        state_row.append(&pill("unset"));
     }
     if let Some(progress) = workspace.progress {
-        state_row.append(&pill(&format!("◔ {progress}%")));
+        state_row.append(&pill(&format!("{progress}%")));
     } else {
-        state_row.append(&pill("◔ unset"));
+        state_row.append(&pill("unset"));
     }
 
     let actions_row = gtk::Box::new(Orientation::Horizontal, 8);
     actions_row.set_halign(Align::Start);
-    let launch_terminal = action_button("⌂ open terminal");
-    let set_status = action_button("⌁ status");
-    let clear_status = action_button("⌁ clear");
-    let set_progress = action_button("◔ progress");
-    let clear_progress = action_button("◌ clear");
-    let append_log = action_button("＋ log");
+    let launch_terminal = action_button("open");
+    let set_status = action_button("status");
+    let clear_status = action_button("clear");
+    let set_progress = action_button("progress");
+    let clear_progress = action_button("clear");
+    let append_log = action_button("log");
     for button in [
         &launch_terminal,
         &set_status,
@@ -67,19 +64,10 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
         actions_row.append(button);
     }
 
-    let hint = gtk::Label::new(Some(&format!(
-        "{} stay persistent while the dominant workspace surface reflects live mux-backed state.",
-        context_panel_titles().join(", ")
-    )));
-    hint.set_wrap(true);
-    hint.set_halign(Align::Start);
-    hint.add_css_class("workspace-hint");
-
     body.append(&title);
     body.append(&summary);
     body.append(&state_row);
     body.append(&actions_row);
-    body.append(&hint);
     panel.append(&body);
 
     WorkspacePanelView {
@@ -96,7 +84,7 @@ pub fn build_workspace_panel(snapshot: &RuntimeSnapshot) -> WorkspacePanelView {
 }
 
 pub fn build_activity_panel(snapshot: &RuntimeSnapshot) -> gtk::Box {
-    let panel = pane_panel("Activity", Some("Recent workspace log"));
+    let panel = pane_panel("Activity", None);
     if snapshot.logs.is_empty() {
         panel.append(&empty_state("No workspace log entries yet."));
         return panel;
@@ -120,9 +108,9 @@ pub fn workspace_status_tokens(
     log_count: usize,
 ) -> [String; 3] {
     [
-        format!("◉ {}", status.unwrap_or("unset")),
-        format!("◔ {}%", progress.unwrap_or(0)),
-        format!("✦ {}L", log_count),
+        status.unwrap_or("unset").to_string(),
+        format!("{}%", progress.unwrap_or(0)),
+        format!("{}L", log_count),
     ]
 }
 
