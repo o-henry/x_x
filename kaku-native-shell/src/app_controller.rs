@@ -1,7 +1,10 @@
 use crate::runtime_bridge::{bootstrap_native_shell_runtime, NativeShellBootstrapPlan};
-use crate::snapshot::{derive_runtime_snapshot, RuntimeSnapshot, ShellLayoutContract, WorkspaceSummary};
+use crate::snapshot::{
+    derive_runtime_snapshot, refresh_scope_for_notification, RuntimeSnapshot, ShellLayoutContract,
+    SnapshotRefreshScope, WorkspaceSummary,
+};
 use adw::prelude::*;
-use glib::ControlFlow;
+use gio::SimpleAction;
 use gtk::gdk;
 use gtk::prelude::IsA;
 use gtk::{Align, Orientation, PolicyType};
@@ -13,6 +16,7 @@ use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +49,7 @@ impl ShellAction {
 pub struct AppController {
     pub window: adw::ApplicationWindow,
     selected_workspace: RefCell<Option<String>>,
+    pending_refresh_scopes: Arc<Mutex<Vec<SnapshotRefreshScope>>>,
     runtime_error: RefCell<Option<String>>,
     runtime_online: Cell<bool>,
 }
@@ -62,6 +67,7 @@ impl AppController {
         Rc::new(Self {
             window,
             selected_workspace: RefCell::new(None),
+            pending_refresh_scopes: Arc::new(Mutex::new(Vec::new())),
             runtime_error: RefCell::new(None),
             runtime_online: Cell::new(false),
         })
@@ -75,6 +81,7 @@ impl AppController {
                 self.selected_workspace
                     .replace(Some(result.mux.active_workspace()));
                 self.runtime_error.replace(None);
+                self.bind_mux_subscriptions(&result.mux);
             }
             Err(err) => {
                 self.runtime_online.set(false);
@@ -84,16 +91,6 @@ impl AppController {
         }
 
         self.rerender();
-
-        let weak = Rc::downgrade(self);
-        glib::timeout_add_seconds_local(2, move || {
-            if let Some(controller) = weak.upgrade() {
-                controller.rerender();
-                ControlFlow::Continue
-            } else {
-                ControlFlow::Break
-            }
-        });
     }
 
     pub fn rerender(self: &Rc<Self>) {
@@ -108,6 +105,62 @@ impl AppController {
         }
 
         derive_runtime_snapshot(self.selected_workspace.borrow().as_deref())
+    }
+
+    fn bind_mux_subscriptions(self: &Rc<Self>, mux: &Arc<Mux>) {
+        let weak = Rc::downgrade(self);
+        let refresh_action = SimpleAction::new("refresh-from-mux", None);
+        refresh_action.connect_activate(move |_, _| {
+            if let Some(controller) = weak.upgrade() {
+                controller.flush_pending_refresh_scopes();
+            }
+        });
+        self.window.add_action(&refresh_action);
+
+        let pending_refresh_scopes = Arc::clone(&self.pending_refresh_scopes);
+        let main_context = glib::MainContext::default();
+        let window_weak = glib::SendWeakRef::from(self.window.downgrade());
+        mux.subscribe(move |notification| {
+            let scope = refresh_scope_for_notification(&notification);
+            if scope != SnapshotRefreshScope::Ignore {
+                pending_refresh_scopes.lock().expect("refresh queue").push(scope);
+                let window_weak = window_weak.clone();
+                main_context.invoke(move || {
+                    if let Some(window) = window_weak.upgrade() {
+                        let _ = gtk::prelude::WidgetExt::activate_action(
+                            &window,
+                            "win.refresh-from-mux",
+                            None,
+                        );
+                    }
+                });
+            }
+            true
+        });
+    }
+
+    fn flush_pending_refresh_scopes(self: &Rc<Self>) {
+        if !self.runtime_online.get() {
+            return;
+        }
+
+        let scopes = {
+            let mut pending = self.pending_refresh_scopes.lock().expect("refresh queue");
+            std::mem::take(&mut *pending)
+        };
+        if scopes.is_empty() {
+            return;
+        }
+
+        if scopes
+            .iter()
+            .any(|scope| matches!(scope, SnapshotRefreshScope::WorkspaceList))
+        {
+            self.selected_workspace
+                .replace(Some(Mux::get().active_workspace()));
+        }
+
+        self.rerender();
     }
 
     fn build_shell(self: &Rc<Self>, snapshot: RuntimeSnapshot) -> gtk::Box {
