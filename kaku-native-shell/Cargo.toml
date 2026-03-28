@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 codec.workspace = true
 config.workspace = true
 gio.workspace = true

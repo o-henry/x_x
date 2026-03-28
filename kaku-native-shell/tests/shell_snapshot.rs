@@ -1,4 +1,16 @@
-use kaku_native_shell::snapshot::{ShellLayoutContract, WorkspaceSummary};
+use chrono::{DateTime, Utc};
+use kaku_native_shell::snapshot::{
+    refresh_scope_for_notification, RuntimeSnapshot, RuntimeSnapshotSource, ShellLayoutContract,
+    SnapshotRefreshScope, WorkspaceSummary,
+};
+use mux::client::ClientId;
+use mux::notification_store::{NotificationRecord, NotificationUnreadMode};
+use mux::pane::PaneId;
+use mux::task_panes::TaskPaneRecord;
+use mux::workspace_state::{WorkspaceLogRecord, WorkspaceProgressRecord, WorkspaceStatusRecord};
+use mux::{MuxNotification, DEFAULT_WORKSPACE};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[test]
 fn shell_layout_contract() {
@@ -21,4 +33,179 @@ fn shell_layout_contract() {
     };
     assert_eq!(workspace.name, "default");
     assert_eq!(workspace.progress, Some(32));
+}
+
+#[derive(Clone, Default)]
+struct SeededSource {
+    active_workspace: String,
+    workspaces: Vec<String>,
+    notifications: Vec<NotificationRecord>,
+    task_panes: Vec<TaskPaneRecord>,
+    statuses: Vec<WorkspaceStatusRecord>,
+    progresses: Vec<WorkspaceProgressRecord>,
+    logs: HashMap<String, Vec<WorkspaceLogRecord>>,
+}
+
+impl RuntimeSnapshotSource for SeededSource {
+    fn active_workspace(&self) -> String {
+        self.active_workspace.clone()
+    }
+
+    fn iter_workspaces(&self) -> Vec<String> {
+        self.workspaces.clone()
+    }
+
+    fn list_notifications(&self) -> Vec<NotificationRecord> {
+        self.notifications.clone()
+    }
+
+    fn list_task_panes(&self) -> Vec<TaskPaneRecord> {
+        self.task_panes.clone()
+    }
+
+    fn list_workspace_status(&self) -> Vec<WorkspaceStatusRecord> {
+        self.statuses.clone()
+    }
+
+    fn list_workspace_progress(&self) -> Vec<WorkspaceProgressRecord> {
+        self.progresses.clone()
+    }
+
+    fn list_workspace_log(&self, workspace: &str) -> Vec<WorkspaceLogRecord> {
+        self.logs.get(workspace).cloned().unwrap_or_default()
+    }
+}
+
+#[test]
+fn shell_uses_mux_truth() {
+    let now = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).expect("fixed timestamp");
+    let source = SeededSource {
+        active_workspace: DEFAULT_WORKSPACE.to_string(),
+        workspaces: vec![DEFAULT_WORKSPACE.to_string(), "unity-main".to_string()],
+        notifications: vec![
+            NotificationRecord {
+                notification_id: "notif-1".to_string(),
+                workspace: "unity-main".to_string(),
+                window_id: None,
+                tab_id: None,
+                pane_id: None,
+                kind: "build".to_string(),
+                title: "Build failed".to_string(),
+                body: Some("worker pane needs attention".to_string()),
+                unread: true,
+                unread_mode: NotificationUnreadMode::Sticky,
+                created_at: now,
+                updated_at: now,
+            },
+            NotificationRecord {
+                notification_id: "notif-2".to_string(),
+                workspace: "unity-main".to_string(),
+                window_id: None,
+                tab_id: None,
+                pane_id: None,
+                kind: "review".to_string(),
+                title: "Review ready".to_string(),
+                body: None,
+                unread: false,
+                unread_mode: NotificationUnreadMode::ClearOnFocus,
+                created_at: now,
+                updated_at: now,
+            },
+        ],
+        task_panes: vec![
+            TaskPaneRecord {
+                pane_id: PaneId::new(11),
+                workspace: Some("unity-main".to_string()),
+                window_id: None,
+                tab_id: None,
+                remain_on_exit: true,
+                silenced: false,
+                is_dead: false,
+                is_failed: false,
+                exit_behavior: None,
+                current_working_dir: Some("file:///tmp/unity-main".to_string()),
+                rerun: HashMap::new(),
+                tee_path: None,
+                updated_at: now,
+            },
+            TaskPaneRecord {
+                pane_id: PaneId::new(12),
+                workspace: Some("unity-main".to_string()),
+                window_id: None,
+                tab_id: None,
+                remain_on_exit: true,
+                silenced: false,
+                is_dead: true,
+                is_failed: true,
+                exit_behavior: Some("CloseOnCleanExit".to_string()),
+                current_working_dir: Some("file:///tmp/unity-main".to_string()),
+                rerun: HashMap::new(),
+                tee_path: None,
+                updated_at: now,
+            },
+        ],
+        statuses: vec![WorkspaceStatusRecord {
+            workspace: "unity-main".to_string(),
+            status: "Building".to_string(),
+            updated_at: now,
+        }],
+        progresses: vec![WorkspaceProgressRecord {
+            workspace: "unity-main".to_string(),
+            value: 70,
+            updated_at: now,
+        }],
+        logs: HashMap::from([(
+            "unity-main".to_string(),
+            vec![WorkspaceLogRecord {
+                workspace: "unity-main".to_string(),
+                seq: 1,
+                message: "build started".to_string(),
+                created_at: now,
+            }],
+        )]),
+    };
+
+    let snapshot = RuntimeSnapshot::from_source(&source, Some("unity-main"));
+
+    assert_eq!(snapshot.active_workspace, "unity-main");
+    assert_eq!(snapshot.notifications.len(), 2);
+    assert_eq!(snapshot.task_panes.len(), 2);
+    assert_eq!(snapshot.logs.len(), 1);
+    let unity = snapshot
+        .workspaces
+        .iter()
+        .find(|workspace| workspace.name == "unity-main")
+        .expect("unity-main workspace summary");
+    assert_eq!(unity.unread_count, 1);
+    assert_eq!(unity.running_count, 1);
+    assert_eq!(unity.failed_count, 1);
+    assert_eq!(unity.status.as_deref(), Some("Building"));
+    assert_eq!(unity.progress, Some(70));
+    assert_eq!(unity.log_count, 1);
+}
+
+#[test]
+fn shell_snapshot_context_updates() {
+    let client_id = Arc::new(ClientId::new());
+
+    assert_eq!(
+        refresh_scope_for_notification(&MuxNotification::NotificationsChanged),
+        SnapshotRefreshScope::Notifications
+    );
+    assert_eq!(
+        refresh_scope_for_notification(&MuxNotification::WorkspaceMetadataChanged),
+        SnapshotRefreshScope::WorkspaceContext
+    );
+    assert_eq!(
+        refresh_scope_for_notification(&MuxNotification::TaskPaneLifecycleChanged(PaneId::new(7))),
+        SnapshotRefreshScope::TaskPanes
+    );
+    assert_eq!(
+        refresh_scope_for_notification(&MuxNotification::ActiveWorkspaceChanged(client_id)),
+        SnapshotRefreshScope::WorkspaceList
+    );
+    assert_eq!(
+        refresh_scope_for_notification(&MuxNotification::WindowInvalidated(2)),
+        SnapshotRefreshScope::Ignore
+    );
 }

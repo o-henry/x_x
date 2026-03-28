@@ -1,7 +1,7 @@
 use mux::notification_store::NotificationRecord;
 use mux::task_panes::TaskPaneRecord;
 use mux::workspace_state::{WorkspaceLogRecord, WorkspaceProgressRecord, WorkspaceStatusRecord};
-use mux::Mux;
+use mux::{Mux, MuxNotification};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkspaceSummary {
@@ -46,73 +46,144 @@ impl ShellLayoutContract {
     }
 }
 
-pub fn derive_runtime_snapshot(selected_workspace: Option<&str>) -> RuntimeSnapshot {
-    let mux = Mux::get();
-    let notifications = mux.list_notifications();
-    let task_panes = mux.list_task_panes();
-    let statuses = mux.list_workspace_status();
-    let progresses = mux.list_workspace_progress();
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SnapshotRefreshScope {
+    Ignore,
+    WorkspaceList,
+    WorkspaceContext,
+    Notifications,
+    TaskPanes,
+}
 
-    let mut names = mux.iter_workspaces();
-    if names.is_empty() {
-        names.push(mux.active_workspace());
+pub trait RuntimeSnapshotSource {
+    fn active_workspace(&self) -> String;
+    fn iter_workspaces(&self) -> Vec<String>;
+    fn list_notifications(&self) -> Vec<NotificationRecord>;
+    fn list_task_panes(&self) -> Vec<TaskPaneRecord>;
+    fn list_workspace_status(&self) -> Vec<WorkspaceStatusRecord>;
+    fn list_workspace_progress(&self) -> Vec<WorkspaceProgressRecord>;
+    fn list_workspace_log(&self, workspace: &str) -> Vec<WorkspaceLogRecord>;
+}
+
+impl RuntimeSnapshotSource for Mux {
+    fn active_workspace(&self) -> String {
+        Mux::active_workspace(self)
     }
-    names.sort();
-    names.dedup();
 
-    let active_workspace = match selected_workspace {
-        Some(selected) if names.iter().any(|name| name == selected) => selected.to_string(),
-        _ => names
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "default".to_string()),
-    };
+    fn iter_workspaces(&self) -> Vec<String> {
+        Mux::iter_workspaces(self)
+    }
 
-    let logs = mux.list_workspace_log(&active_workspace);
-    let workspaces = names
-        .iter()
-        .map(|name| WorkspaceSummary {
-            name: name.clone(),
-            unread_count: notifications
-                .iter()
-                .filter(|record| record.workspace == *name && record.unread)
-                .count(),
-            running_count: task_panes
-                .iter()
-                .filter(|record| {
-                    record.workspace.as_deref() == Some(name.as_str()) && !record.is_dead
-                })
-                .count(),
-            failed_count: task_panes
-                .iter()
-                .filter(|record| {
-                    record.workspace.as_deref() == Some(name.as_str()) && record.is_failed
-                })
-                .count(),
-            status: statuses
-                .iter()
-                .find(|record| record.workspace == *name)
-                .map(|record| record.status.clone()),
-            progress: progresses
-                .iter()
-                .find(|record| record.workspace == *name)
-                .map(|record| record.value),
-            log_count: if name == &active_workspace {
-                logs.len()
-            } else {
-                mux.list_workspace_log(name).len()
-            },
-        })
-        .collect::<Vec<_>>();
+    fn list_notifications(&self) -> Vec<NotificationRecord> {
+        Mux::list_notifications(self)
+    }
 
-    RuntimeSnapshot {
-        active_workspace,
-        workspaces,
-        notifications,
-        task_panes,
-        statuses,
-        progresses,
-        logs,
+    fn list_task_panes(&self) -> Vec<TaskPaneRecord> {
+        Mux::list_task_panes(self)
+    }
+
+    fn list_workspace_status(&self) -> Vec<WorkspaceStatusRecord> {
+        Mux::list_workspace_status(self)
+    }
+
+    fn list_workspace_progress(&self) -> Vec<WorkspaceProgressRecord> {
+        Mux::list_workspace_progress(self)
+    }
+
+    fn list_workspace_log(&self, workspace: &str) -> Vec<WorkspaceLogRecord> {
+        Mux::list_workspace_log(self, workspace)
     }
 }
 
+impl RuntimeSnapshot {
+    pub fn from_source<S: RuntimeSnapshotSource>(
+        source: &S,
+        selected_workspace: Option<&str>,
+    ) -> RuntimeSnapshot {
+        let notifications = source.list_notifications();
+        let task_panes = source.list_task_panes();
+        let statuses = source.list_workspace_status();
+        let progresses = source.list_workspace_progress();
+
+        let mut names = source.iter_workspaces();
+        if names.is_empty() {
+            names.push(source.active_workspace());
+        }
+        names.sort();
+        names.dedup();
+
+        let active_workspace = match selected_workspace {
+            Some(selected) if names.iter().any(|name| name == selected) => selected.to_string(),
+            _ => names
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "default".to_string()),
+        };
+
+        let logs = source.list_workspace_log(&active_workspace);
+        let workspaces = names
+            .iter()
+            .map(|name| WorkspaceSummary {
+                name: name.clone(),
+                unread_count: notifications
+                    .iter()
+                    .filter(|record| record.workspace == *name && record.unread)
+                    .count(),
+                running_count: task_panes
+                    .iter()
+                    .filter(|record| {
+                        record.workspace.as_deref() == Some(name.as_str()) && !record.is_dead
+                    })
+                    .count(),
+                failed_count: task_panes
+                    .iter()
+                    .filter(|record| {
+                        record.workspace.as_deref() == Some(name.as_str()) && record.is_failed
+                    })
+                    .count(),
+                status: statuses
+                    .iter()
+                    .find(|record| record.workspace == *name)
+                    .map(|record| record.status.clone()),
+                progress: progresses
+                    .iter()
+                    .find(|record| record.workspace == *name)
+                    .map(|record| record.value),
+                log_count: if name == &active_workspace {
+                    logs.len()
+                } else {
+                    source.list_workspace_log(name).len()
+                },
+            })
+            .collect::<Vec<_>>();
+
+        RuntimeSnapshot {
+            active_workspace,
+            workspaces,
+            notifications,
+            task_panes,
+            statuses,
+            progresses,
+            logs,
+        }
+    }
+}
+
+pub fn refresh_scope_for_notification(notification: &MuxNotification) -> SnapshotRefreshScope {
+    match notification {
+        MuxNotification::NotificationsChanged => SnapshotRefreshScope::Notifications,
+        MuxNotification::WorkspaceMetadataChanged => SnapshotRefreshScope::WorkspaceContext,
+        MuxNotification::TaskPaneLifecycleChanged(_)
+        | MuxNotification::PaneAdded(_)
+        | MuxNotification::PaneRemoved(_) => SnapshotRefreshScope::TaskPanes,
+        MuxNotification::ActiveWorkspaceChanged(_)
+        | MuxNotification::WorkspaceRenamed { .. }
+        | MuxNotification::WindowWorkspaceChanged(_) => SnapshotRefreshScope::WorkspaceList,
+        _ => SnapshotRefreshScope::Ignore,
+    }
+}
+
+pub fn derive_runtime_snapshot(selected_workspace: Option<&str>) -> RuntimeSnapshot {
+    let mux = Mux::get();
+    RuntimeSnapshot::from_source(mux.as_ref(), selected_workspace)
+}

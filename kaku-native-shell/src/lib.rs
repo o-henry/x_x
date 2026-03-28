@@ -1,4 +1,5 @@
 pub mod app_controller;
+pub mod actions;
 pub mod runtime_bridge;
 pub mod snapshot;
 
@@ -17,4 +18,3 @@ pub fn run() {
     });
     app.run();
 }
-
