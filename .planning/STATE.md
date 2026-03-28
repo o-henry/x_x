@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-28T03:23:50.884Z"
+last_updated: "2026-03-28T03:40:52.456Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 39
-  completed_plans: 32
+  completed_plans: 33
   percent: 100
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-26)
 ## Current Position
 
 Phase: 08 (native-shell-replatform) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-03-28
 
@@ -99,6 +99,7 @@ Recent decisions affecting current work:
 - [Phase 08-native-shell-replatform]: Phase closeout now requires a proven shared-runtime bootstrap path and a proven companion-terminal bridge, not just documented fallback limitations.
 - [Phase 08]: The native shell now boots through a first-class shared runtime seam in kaku-runtime, while kaku-gui stays on the same publish path as a fallback companion.
 - [Phase 08]: Wave 0 contracts live in a library-backed shell crate so controller, snapshot, and bootstrap behavior can be tested without treating GTK startup as the only seam.
+- [Phase 08-native-shell-replatform]: Unread and workspace metadata mutations live behind ShellActionTarget so later codec and client migration stays visible.
 
 ### Pending Todos
 
