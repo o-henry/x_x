@@ -1,0 +1,24 @@
+[package]
+name = "kaku-native-shell"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+codec.workspace = true
+config.workspace = true
+dirs-next.workspace = true
+gio.workspace = true
+glib.workspace = true
+gtk.workspace = true
+adw.workspace = true
+kaku-runtime.workspace = true
+log.workspace = true
+mux.workspace = true
+portable-pty.workspace = true
+promise.workspace = true
+wezterm-client.workspace = true
+wezterm-gui-subcommands.workspace = true
+wezterm-term.workspace = true

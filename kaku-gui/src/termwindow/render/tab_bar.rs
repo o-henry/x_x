@@ -6,7 +6,7 @@ use mux::renderable::RenderableDimensions;
 use wezterm_term::color::ColorAttribute;
 use window::color::LinearRgba;
 
-pub(crate) const FANCY_TAB_BAR_HEIGHT_MULTIPLIER: f32 = 1.48;
+pub(crate) const FANCY_TAB_BAR_HEIGHT_MULTIPLIER: f32 = 1.24;
 
 impl crate::TermWindow {
     pub fn paint_tab_bar(&mut self, layers: &mut TripleLayerQuadAllocator) -> anyhow::Result<()> {
@@ -199,11 +199,13 @@ mod tests {
         let render_metrics = RenderMetrics::new(&fonts).expect("render metrics");
         let font = fonts.title_font().expect("title font");
         let baseline_height = (font.metrics().cell_height.get() as f32 * 1.75).ceil();
+        let quieter_reference_height = (font.metrics().cell_height.get() as f32 * 1.48).ceil();
         let actual =
             crate::TermWindow::tab_bar_pixel_height_impl(&config, fonts.as_ref(), &render_metrics)
                 .expect("tab bar height");
 
         assert!(actual < baseline_height);
+        assert!(actual < quieter_reference_height);
         assert_eq!(
             actual,
             (font.metrics().cell_height.get() as f32 * FANCY_TAB_BAR_HEIGHT_MULTIPLIER).ceil()

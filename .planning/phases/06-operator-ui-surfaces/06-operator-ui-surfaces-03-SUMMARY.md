@@ -86,7 +86,7 @@ Each task was committed atomically:
 
 ## Issues Encountered
 
-- `cargo test --locked -p kaku-gui tabbar -- --nocapture` is currently blocked by unrelated pre-existing test references in `kaku-gui/src/overlay/task_center.rs` to missing helpers `row_text_for_test` and `header_lines_for_test`. This was recorded in `deferred-items.md` instead of being folded into this plan.
+- The first `cargo test --locked -p kaku-gui tabbar -- --nocapture` run was blocked by missing Task Center test helper coverage that landed in Plan 06-02 shortly after this plan finished. The targeted tabbar suite was rerun after Wave 2 converged and is now green.
 
 ## Known Stubs
 
@@ -99,7 +99,7 @@ None - no external service configuration required.
 ## Next Phase Readiness
 
 - The always-visible frame now advertises actionable operator state and can hand off into Task Center without adding a new surface.
-- Phase 06-04 should close the loop with end-to-end verification once the unrelated `overlay/task_center.rs` test helper gap is resolved or explicitly handled.
+- Wave 2 is fully verification-ready: the tabbar suite reran green after the Task Center helper work from Plan 06-02 landed, so Phase 06-04 can move straight into end-to-end verification and documentation closeout.
 
 ## Self-Check
 

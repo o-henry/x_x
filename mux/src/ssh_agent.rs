@@ -86,7 +86,9 @@ impl AgentProxy {
 
         if let Some(inherited) = Self::default_ssh_auth_sock() {
             if let Err(err) = update_symlink(&inherited, &sock_path) {
-                log::error!("failed to set {sock_path:?} to initial inherited SSH_AUTH_SOCK value of {inherited:?}: {err:#}");
+                log::error!(
+                    "failed to set {sock_path:?} to initial inherited SSH_AUTH_SOCK value of {inherited:?}: {err:#}"
+                );
             }
         }
 

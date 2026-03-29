@@ -318,9 +318,10 @@ Phase 6 concrete shipped shape:
 
 Known Phase 6 boundaries:
 
-- the targeted `kaku-gui` closeout suite now covers the common operator workflow, but the 2026-03-27 closeout reattempt did not produce a fresh responsive GUI socket for a renewed live desktop pass
+- the targeted `kaku-gui` closeout suite is green, and the rebuilt 2026-03-27 runtime was rechecked with a fresh responsive GUI socket plus a confirmed native Task Center keyboard path (`Task Center` open, `Arrow Down`, `Enter`)
 - tabbar markers intentionally stop at discoverability and Task Center handoff; they do not host inline editing or multi-action chrome
 - workspace metadata editing is limited to status and progress through prompt/confirm metadata editing, with logs still left to the CLI path
+- the shipped operator UI is functionally usable, but its visual treatment is still more text-heavy and utilitarian than the desired reference-video polish; a follow-up visual phase should address icon-first affordances, DM Mono default usage, and richer composition without leaving native Kaku seams
 
 ## 5. Non-Goals
 

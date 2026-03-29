@@ -380,7 +380,8 @@ impl crate::TermWindow {
             .config
             .window_padding
             .left
-            .evaluate_as_pixels(h_context);
+            .evaluate_as_pixels(h_context)
+            + self.operator_nav_width_px() as f32;
         let padding_right = self.config.window_padding.right;
         let tab_bar_height = if self.show_tab_bar {
             self.tab_bar_pixel_height().unwrap_or(0.) as usize

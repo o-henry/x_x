@@ -62,3 +62,26 @@ impl RenameWorkspace {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn existing_cli_regressions_rename_workspace_accepts_explicit_workspace() {
+        let cmd =
+            RenameWorkspace::parse_from(["kaku", "--workspace", "old", "--pane-id", "12", "new"]);
+        assert_eq!(cmd.workspace.as_deref(), Some("old"));
+        assert_eq!(cmd.pane_id, Some(PaneId::from(12usize)));
+        assert_eq!(cmd.new_workspace, "new");
+    }
+
+    #[test]
+    fn existing_cli_regressions_rename_workspace_accepts_positional_target_name() {
+        let cmd = RenameWorkspace::parse_from(["kaku", "fresh-name"]);
+        assert_eq!(cmd.workspace, None);
+        assert_eq!(cmd.pane_id, None);
+        assert_eq!(cmd.new_workspace, "fresh-name");
+    }
+}

@@ -3,7 +3,7 @@ use crate::termwindow::TermWindowNotif;
 use mux::task_center::{TaskCenterEntry, TaskCenterKind, TaskCenterSource};
 use mux::termwiztermtab::TermWizTerminal;
 use mux::Mux;
-use termwiz::cell::{AttributeChange, CellAttributes};
+use termwiz::cell::{unicode_column_width, AttributeChange, CellAttributes};
 use termwiz::input::{InputEvent, KeyCode, KeyEvent, Modifiers, MouseButtons, MouseEvent};
 use termwiz::surface::{Change, Position};
 use termwiz::terminal::Terminal;
@@ -12,6 +12,20 @@ use window::WindowOps;
 
 const ROW_OVERHEAD: usize = 4;
 const ROW_START_Y: usize = ROW_OVERHEAD - 1;
+const RAIL_WIDTH: usize = 18;
+const CONTENT_START_X: usize = RAIL_WIDTH + 2;
+const ICON_FOCUS: &str = "⏎";
+const ICON_CLEAR: &str = "●";
+const ICON_RERUN: &str = "↺";
+const ICON_HOLD: &str = "◎";
+const ICON_STATUS: &str = "◇";
+const ICON_PROGRESS: &str = "◔";
+const ICON_DELETE: &str = "⌫";
+const ICON_WORKSPACE: &str = "⌂";
+const ICON_SOURCE: &str = "◦";
+const ICON_UNREAD: &str = "●";
+const ICON_FAILED: &str = "✕";
+const ICON_RUNNING: &str = "◌";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RowAction {
@@ -64,6 +78,16 @@ enum OverlayMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TaskCenterSection {
+    All,
+    Inbox,
+    Failed,
+    Running,
+    Metadata,
+    Tasks,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ClickState {
     row: usize,
     streak: usize,
@@ -96,6 +120,7 @@ pub struct TaskCenterOverlay {
     window: Option<::window::Window>,
     mode: OverlayMode,
     click_state: Option<ClickState>,
+    selected_section: TaskCenterSection,
 }
 
 impl TaskCenterOverlay {
@@ -111,6 +136,7 @@ impl TaskCenterOverlay {
             window: None,
             mode: OverlayMode::List,
             click_state: None,
+            selected_section: TaskCenterSection::All,
         };
         overlay.update_filter();
         overlay
@@ -196,12 +222,26 @@ impl TaskCenterOverlay {
         true
     }
 
+    fn matches_selected_section(&self, entry: &TaskCenterEntry) -> bool {
+        match self.selected_section {
+            TaskCenterSection::All => true,
+            TaskCenterSection::Inbox => entry.unread_count > 0,
+            TaskCenterSection::Failed => entry.is_failed,
+            TaskCenterSection::Running => entry.is_running,
+            TaskCenterSection::Metadata => {
+                entry.workspace_status.is_some() || entry.workspace_progress.is_some()
+            }
+            TaskCenterSection::Tasks => matches!(entry.kind, TaskCenterKind::Pane),
+        }
+    }
+
     fn update_filter(&mut self) {
         let parsed = Self::parse_query(&self.filter_term);
         self.filters = parsed.filters;
         self.filtered_entries = self
             .entries
             .iter()
+            .filter(|entry| self.matches_selected_section(entry))
             .filter(|entry| Self::matches_filters(entry, &self.filters))
             .cloned()
             .collect();
@@ -228,6 +268,7 @@ impl TaskCenterOverlay {
 
     fn active_filter_summary(&self) -> String {
         let mut parts = Vec::new();
+        parts.push(self.selected_section.label().to_ascii_lowercase());
         if self.filters.unread {
             parts.push("unread".to_string());
         }
@@ -255,34 +296,34 @@ impl TaskCenterOverlay {
 
     fn base_row_text(entry: &TaskCenterEntry) -> String {
         let mut suffixes = Vec::new();
-        suffixes.push(format!("ws:{}", entry.workspace));
+        suffixes.push(format!("{ICON_WORKSPACE} {}", entry.workspace));
         let source = entry
             .source_label
             .clone()
             .unwrap_or_else(|| format!("{:?}", entry.source).to_lowercase());
-        suffixes.push(format!("src:{source}"));
+        suffixes.push(format!("{ICON_SOURCE} {source}"));
         if let Some(kind) = &entry.kind_label {
-            suffixes.push(format!("kind:{kind}"));
+            suffixes.push(kind.clone());
         }
         if entry.unread_count > 0 {
-            suffixes.push(format!("u{}", entry.unread_count));
+            suffixes.push(format!("{ICON_UNREAD}{}", entry.unread_count));
         }
         if entry.is_failed {
-            suffixes.push("failed".to_string());
+            suffixes.push(ICON_FAILED.to_string());
         }
         if entry.is_running {
-            suffixes.push("running".to_string());
+            suffixes.push(ICON_RUNNING.to_string());
         }
         if entry.rerun_available {
-            suffixes.push("rerun".to_string());
+            suffixes.push(ICON_RERUN.to_string());
         }
         if let Some(status) = &entry.workspace_status {
-            suffixes.push(format!("[{status}]"));
+            suffixes.push(format!("{ICON_STATUS} {status}"));
         }
         if let Some(progress) = entry.workspace_progress {
-            suffixes.push(format!("{progress}%"));
+            suffixes.push(format!("{ICON_PROGRESS} {progress}%"));
         }
-        format!("{} · {}", entry.label, suffixes.join(" "))
+        format!("{}  {}", entry.label, suffixes.join("  "))
     }
 
     fn selected_entry_remain_on_exit(&self) -> Option<bool> {
@@ -322,24 +363,30 @@ impl TaskCenterOverlay {
     }
 
     fn action_targets_for_entry(entry: &TaskCenterEntry) -> Vec<(RowAction, String)> {
-        let mut actions = vec![(RowAction::Focus, "[open]".to_string())];
+        let mut actions = vec![(RowAction::Focus, format!("[{ICON_FOCUS} open]"))];
 
         if entry.unread_count > 0 && !entry.notification_ids.is_empty() {
-            actions.push((RowAction::ClearUnread, "[clear]".to_string()));
+            actions.push((RowAction::ClearUnread, format!("[{ICON_CLEAR} clear]")));
         }
         if entry.is_failed && entry.rerun_available {
-            actions.push((RowAction::Rerun, "[rerun]".to_string()));
+            actions.push((RowAction::Rerun, format!("[{ICON_RERUN} rerun]")));
         }
         if let Some(remain_on_exit) = Self::remain_on_exit_state_for_entry(entry) {
             actions.push((
                 RowAction::ToggleRemainOnExit,
-                format!("[hold:{}]", if remain_on_exit { "on" } else { "off" }),
+                format!(
+                    "[{ICON_HOLD} hold:{}]",
+                    if remain_on_exit { "on" } else { "off" }
+                ),
             ));
         }
-        actions.push((RowAction::EditStatus, "[status]".to_string()));
-        actions.push((RowAction::EditProgress, "[progress]".to_string()));
+        actions.push((RowAction::EditStatus, format!("[{ICON_STATUS} status]")));
+        actions.push((
+            RowAction::EditProgress,
+            format!("[{ICON_PROGRESS} progress]"),
+        ));
         if entry.workspace_status.is_some() || entry.workspace_progress.is_some() {
-            actions.push((RowAction::ClearMetadata, "[clear-meta]".to_string()));
+            actions.push((RowAction::ClearMetadata, format!("[{ICON_DELETE} clear]")));
         }
 
         actions
@@ -350,13 +397,13 @@ impl TaskCenterOverlay {
         let mut action_targets = Vec::new();
 
         if active {
-            let mut cursor = text.len();
+            let mut cursor = unicode_column_width(&text, None);
             for (action, label) in Self::action_targets_for_entry(entry) {
                 text.push(' ');
                 cursor += 1;
                 let start = cursor;
                 text.push_str(&label);
-                cursor += label.len();
+                cursor += unicode_column_width(&label, None);
                 action_targets.push(ActionTarget {
                     action,
                     start,
@@ -403,16 +450,78 @@ impl TaskCenterOverlay {
         [
             "Task Center".to_string(),
             format!(
-                "filters: {} | query: {}",
+                "scope {}  / {}",
                 self.active_filter_summary(),
                 if self.filter_term.is_empty() {
-                    "(none)"
+                    "type to filter"
                 } else {
                     &self.filter_term
                 }
             ),
-            "Click=select Double-click/Enter=focus C=clear R=rerun H=hold S=status P=progress M=clear meta Esc=close".to_string(),
+            format!(
+                "←/→ rail  {ICON_FOCUS} focus  click select  dbl-click focus  {ICON_RERUN} rerun  {ICON_HOLD} hold  {ICON_STATUS} status  {ICON_PROGRESS} progress  esc close"
+            ),
         ]
+    }
+
+    fn section_entries(&self) -> Vec<(TaskCenterSection, String)> {
+        TaskCenterSection::ordered()
+            .iter()
+            .copied()
+            .map(|section| {
+                let count = self
+                    .entries
+                    .iter()
+                    .filter(|entry| self.section_matches(section, entry))
+                    .count();
+                (
+                    section,
+                    format!("{} {} {}", section.icon(), section.label(), count),
+                )
+            })
+            .collect()
+    }
+
+    fn section_matches(&self, section: TaskCenterSection, entry: &TaskCenterEntry) -> bool {
+        match section {
+            TaskCenterSection::All => true,
+            TaskCenterSection::Inbox => entry.unread_count > 0,
+            TaskCenterSection::Failed => entry.is_failed,
+            TaskCenterSection::Running => entry.is_running,
+            TaskCenterSection::Metadata => {
+                entry.workspace_status.is_some() || entry.workspace_progress.is_some()
+            }
+            TaskCenterSection::Tasks => matches!(entry.kind, TaskCenterKind::Pane),
+        }
+    }
+
+    fn set_selected_section(&mut self, section: TaskCenterSection) {
+        if self.selected_section != section {
+            self.selected_section = section;
+            self.update_filter();
+        }
+    }
+
+    fn move_section_left(&mut self) {
+        let sections = TaskCenterSection::ordered();
+        let idx = sections
+            .iter()
+            .position(|section| *section == self.selected_section)
+            .unwrap_or(0);
+        if idx > 0 {
+            self.set_selected_section(sections[idx - 1]);
+        }
+    }
+
+    fn move_section_right(&mut self) {
+        let sections = TaskCenterSection::ordered();
+        let idx = sections
+            .iter()
+            .position(|section| *section == self.selected_section)
+            .unwrap_or(0);
+        if idx + 1 < sections.len() {
+            self.set_selected_section(sections[idx + 1]);
+        }
     }
 
     fn visible_row_capacity(&self) -> usize {
@@ -612,7 +721,9 @@ impl TaskCenterOverlay {
 
     fn render_list(&mut self, term: &mut TermWizTerminal) -> termwiz::Result<()> {
         let size = term.get_screen_size()?;
-        let max_width = size.cols.saturating_sub(2);
+        let rail_width = RAIL_WIDTH.min(size.cols.saturating_sub(4));
+        let content_start_x = (rail_width + 2).min(size.cols.saturating_sub(1));
+        let max_width = size.cols.saturating_sub(content_start_x + 1);
         self.max_items = size.rows.saturating_sub(ROW_OVERHEAD);
 
         let header = self.header_lines();
@@ -629,37 +740,57 @@ impl TaskCenterOverlay {
             Change::AllAttributes(CellAttributes::default()),
         ];
 
-        if self.filtered_entries.is_empty() {
-            changes.push(Change::Text(format!(
-                "{}\r\n",
-                truncate_right(self.empty_state_message(), max_width)
-            )));
-            return term.render(&changes);
-        }
-
         self.ensure_active_row_visible();
 
-        for (row_num, (entry_idx, entry)) in self
-            .filtered_entries
-            .iter()
-            .enumerate()
-            .skip(self.top_row)
-            .enumerate()
-        {
-            if row_num >= self.visible_row_capacity() {
-                break;
+        let section_entries = self.section_entries();
+        let visible_rows = self.visible_row_capacity();
+        for row_num in 0..visible_rows {
+            let row_y = ROW_START_Y + row_num;
+
+            if let Some((section, label)) = section_entries.get(row_num) {
+                changes.push(Change::CursorPosition {
+                    x: Position::Absolute(0),
+                    y: Position::Absolute(row_y),
+                });
+                if *section == self.selected_section {
+                    changes.push(AttributeChange::Reverse(true).into());
+                }
+                changes.push(Change::Text(
+                    truncate_right(label, rail_width).to_string().into(),
+                ));
+                if *section == self.selected_section {
+                    changes.push(AttributeChange::Reverse(false).into());
+                }
             }
 
-            if entry_idx == self.active_idx {
-                changes.push(AttributeChange::Reverse(true).into());
-            }
-            let row = Self::row_layout(entry, entry_idx == self.active_idx);
-            changes.push(Change::Text(format!(
-                "{}\r\n",
-                truncate_right(&row.text, max_width)
-            )));
-            if entry_idx == self.active_idx {
-                changes.push(AttributeChange::Reverse(false).into());
+            changes.push(Change::CursorPosition {
+                x: Position::Absolute(content_start_x),
+                y: Position::Absolute(row_y),
+            });
+
+            if let Some((entry_idx, entry)) = self
+                .filtered_entries
+                .iter()
+                .enumerate()
+                .skip(self.top_row)
+                .nth(row_num)
+            {
+                if entry_idx == self.active_idx {
+                    changes.push(AttributeChange::Reverse(true).into());
+                }
+                let row = Self::row_layout(entry, entry_idx == self.active_idx);
+                changes.push(Change::Text(
+                    truncate_right(&row.text, max_width).to_string().into(),
+                ));
+                if entry_idx == self.active_idx {
+                    changes.push(AttributeChange::Reverse(false).into());
+                }
+            } else if row_num == 0 && self.filtered_entries.is_empty() {
+                changes.push(Change::Text(
+                    truncate_right(self.empty_state_message(), max_width)
+                        .to_string()
+                        .into(),
+                ));
             }
         }
 
@@ -674,8 +805,8 @@ impl TaskCenterOverlay {
         let size = term.get_screen_size()?;
         let max_width = size.cols.saturating_sub(2);
         let title = match prompt.kind {
-            PromptKind::Status => format!("Task Center · status · {}", prompt.workspace),
-            PromptKind::Progress => format!("Task Center · progress · {}", prompt.workspace),
+            PromptKind::Status => format!("{ICON_STATUS} status  {}", prompt.workspace),
+            PromptKind::Progress => format!("{ICON_PROGRESS} progress  {}", prompt.workspace),
         };
         let current = if prompt.input.is_empty() {
             "(empty)".to_string()
@@ -683,8 +814,8 @@ impl TaskCenterOverlay {
             prompt.input.clone()
         };
         let help = match prompt.kind {
-            PromptKind::Status => "Enter=save Esc=cancel | blank clears status",
-            PromptKind::Progress => "Enter=save Esc=cancel | blank clears progress | 0-100",
+            PromptKind::Status => "Enter save  Esc cancel  blank clears",
+            PromptKind::Progress => "Enter save  Esc cancel  blank clears  0-100",
         };
         let prompt_label = match prompt.kind {
             PromptKind::Status => "status> ",
@@ -729,7 +860,7 @@ impl TaskCenterOverlay {
                 x: Position::Absolute(0),
                 y: Position::Absolute(0),
             },
-            Change::Text("Task Center · clear metadata\r\n".to_string()),
+            Change::Text(format!("{ICON_DELETE} clear metadata\r\n")),
             Change::Text(format!(
                 "{}\r\n",
                 truncate_right(
@@ -761,6 +892,10 @@ impl TaskCenterOverlay {
             .into_iter()
             .find(|target| x >= target.start && x < target.end)
             .map(|target| target.action)
+    }
+
+    fn section_at_row(&self, row: usize) -> Option<TaskCenterSection> {
+        self.section_entries().get(row).map(|(section, _)| *section)
     }
 
     fn trigger_row_action(&mut self, action: RowAction) -> bool {
@@ -829,7 +964,18 @@ impl TaskCenterOverlay {
             return false;
         }
 
-        let row = self.top_row + y as usize - ROW_START_Y;
+        let row = y as usize - ROW_START_Y;
+        if (x as usize) < RAIL_WIDTH {
+            if mouse_buttons == MouseButtons::LEFT {
+                if let Some(section) = self.section_at_row(row) {
+                    self.set_selected_section(section);
+                }
+            }
+            return false;
+        }
+
+        let content_x = x as usize;
+        let row = self.top_row + row;
         if row >= self.filtered_entries.len() {
             return false;
         }
@@ -838,7 +984,8 @@ impl TaskCenterOverlay {
         self.ensure_active_row_visible();
 
         if mouse_buttons == MouseButtons::LEFT {
-            if let Some(action) = self.row_action_at(row, x as usize) {
+            if let Some(action) = self.row_action_at(row, content_x.saturating_sub(CONTENT_START_X))
+            {
                 self.click_state = None;
                 return self.trigger_row_action(action);
             }
@@ -1017,6 +1164,20 @@ impl TaskCenterOverlay {
                         self.move_selection_down();
                         false
                     }
+                    InputEvent::Key(KeyEvent {
+                        key: KeyCode::LeftArrow,
+                        ..
+                    }) => {
+                        self.move_section_left();
+                        false
+                    }
+                    InputEvent::Key(KeyEvent {
+                        key: KeyCode::RightArrow,
+                        ..
+                    }) => {
+                        self.move_section_right();
+                        false
+                    }
                     InputEvent::Mouse(mouse) => self.handle_list_mouse_event(mouse),
                     _ => false,
                 },
@@ -1078,6 +1239,11 @@ impl TaskCenterOverlay {
     }
 
     #[cfg(test)]
+    fn selected_section_for_test(&self) -> TaskCenterSection {
+        self.selected_section
+    }
+
+    #[cfg(test)]
     fn action_x_for_test(&self, action: RowAction) -> Option<usize> {
         let entry = self.filtered_entries.get(self.active_idx)?;
         let layout = Self::row_layout(entry, true);
@@ -1085,7 +1251,7 @@ impl TaskCenterOverlay {
             .action_targets
             .into_iter()
             .find(|target| target.action == action)
-            .map(|target| target.start)
+            .map(|target| CONTENT_START_X + target.start)
     }
 
     #[cfg(test)]
@@ -1101,6 +1267,41 @@ impl TaskCenterOverlay {
                 ..
             }) => "prompt:progress",
             OverlayMode::Confirm(_) => "confirm",
+        }
+    }
+}
+
+impl TaskCenterSection {
+    fn ordered() -> [TaskCenterSection; 6] {
+        [
+            TaskCenterSection::All,
+            TaskCenterSection::Inbox,
+            TaskCenterSection::Failed,
+            TaskCenterSection::Running,
+            TaskCenterSection::Metadata,
+            TaskCenterSection::Tasks,
+        ]
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            TaskCenterSection::All => "All",
+            TaskCenterSection::Inbox => "Inbox",
+            TaskCenterSection::Failed => "Failed",
+            TaskCenterSection::Running => "Running",
+            TaskCenterSection::Metadata => "Metadata",
+            TaskCenterSection::Tasks => "Tasks",
+        }
+    }
+
+    fn icon(self) -> &'static str {
+        match self {
+            TaskCenterSection::All => "◈",
+            TaskCenterSection::Inbox => ICON_UNREAD,
+            TaskCenterSection::Failed => ICON_FAILED,
+            TaskCenterSection::Running => ICON_RUNNING,
+            TaskCenterSection::Metadata => ICON_STATUS,
+            TaskCenterSection::Tasks => ICON_SOURCE,
         }
     }
 }
@@ -1140,7 +1341,9 @@ fn parse_kind(input: &str) -> Option<TaskCenterKind> {
 
 #[cfg(test)]
 mod tests {
-    use super::{task_center, RowAction, TaskCenterOverlay, ROW_START_Y};
+    use super::{
+        task_center, RowAction, TaskCenterOverlay, TaskCenterSection, CONTENT_START_X, ROW_START_Y,
+    };
     use mux::task_center::{TaskCenterEntry, TaskCenterKind, TaskCenterSource};
     use termwiz::input::MouseButtons;
 
@@ -1324,11 +1527,11 @@ mod tests {
         let row = TaskCenterOverlay::format_row(&failed);
         assert!(row.starts_with("Failed build"));
         assert!(row.contains("unity-main"));
-        assert!(row.contains("u2"));
-        assert!(row.contains("failed"));
-        assert!(row.contains("running"));
-        assert!(row.contains("rerun"));
-        assert!(row.contains("[blocked]"));
+        assert!(row.contains("●2"));
+        assert!(row.contains("✕"));
+        assert!(row.contains("◌"));
+        assert!(row.contains("↺"));
+        assert!(row.contains("◇ blocked"));
         assert!(row.contains("37%"));
     }
 
@@ -1350,13 +1553,13 @@ mod tests {
 
         let row = TaskCenterOverlay::row_text_for_test(&task_pane, true);
         assert!(!row.contains('\n'));
-        assert!(row.contains("[open]"));
-        assert!(row.contains("[clear]"));
-        assert!(row.contains("[rerun]"));
-        assert!(row.contains("[hold:"));
-        assert!(row.contains("[status]"));
-        assert!(row.contains("[progress]"));
-        assert!(row.contains("[clear-meta]"));
+        assert!(row.contains("[⏎ open]"));
+        assert!(row.contains("[● clear]"));
+        assert!(row.contains("[↺ rerun]"));
+        assert!(row.contains("[◎ hold:"));
+        assert!(row.contains("[◇ status]"));
+        assert!(row.contains("[◔ progress]"));
+        assert!(row.contains("[⌫ clear]"));
     }
 
     #[test]
@@ -1371,11 +1574,75 @@ mod tests {
 
         assert_eq!(header.len(), 3);
         assert!(header[0].contains("Task Center"));
-        assert!(header[2].contains("Click=select"));
-        assert!(header[2].contains("Double-click/Enter=focus"));
+        assert!(header[2].contains("click select"));
+        assert!(header[2].contains("dbl-click focus"));
+        assert!(header[2].contains("←/→ rail"));
         assert!(header[2].contains("hold"));
         assert!(header[2].contains("status"));
         assert!(header[2].contains("progress"));
+    }
+
+    #[test]
+    fn task_center_left_rail_mouse_click_switches_section() {
+        let mut unread = entry(
+            "Unread build",
+            "unity-main",
+            TaskCenterSource::Notification,
+            TaskCenterKind::Notification,
+        );
+        unread.unread_count = 2;
+
+        let mut overlay = TaskCenterOverlay::new(vec![
+            unread,
+            entry(
+                "Worker",
+                "unity-main",
+                TaskCenterSource::Pane,
+                TaskCenterKind::Pane,
+            ),
+        ]);
+
+        let should_close = overlay.handle_mouse_for_test(1, ROW_START_Y + 1, MouseButtons::LEFT);
+        assert!(!should_close);
+        assert_eq!(
+            overlay.selected_section_for_test(),
+            TaskCenterSection::Inbox
+        );
+        assert_eq!(overlay.filtered_entries.len(), 1);
+        assert_eq!(overlay.filtered_entries[0].label, "Unread build");
+    }
+
+    #[test]
+    fn task_center_arrow_keys_can_switch_sections() {
+        let mut with_metadata = entry(
+            "Workspace health",
+            "unity-main",
+            TaskCenterSource::Workspace,
+            TaskCenterKind::Workspace,
+        );
+        with_metadata.workspace_status = Some("blocked".to_string());
+
+        let mut overlay = TaskCenterOverlay::new(vec![
+            with_metadata,
+            entry(
+                "Worker",
+                "unity-main",
+                TaskCenterSource::Pane,
+                TaskCenterKind::Pane,
+            ),
+        ]);
+
+        overlay.move_section_right();
+        overlay.move_section_right();
+        overlay.move_section_right();
+        overlay.move_section_right();
+
+        assert_eq!(
+            overlay.selected_section_for_test(),
+            TaskCenterSection::Metadata
+        );
+        assert_eq!(overlay.filtered_entries.len(), 1);
+        assert_eq!(overlay.filtered_entries[0].label, "Workspace health");
     }
 
     #[test]
@@ -1396,11 +1663,13 @@ mod tests {
         ]);
         overlay.set_visible_rows_for_test(3);
 
-        let should_close = overlay.handle_mouse_for_test(0, ROW_START_Y + 1, MouseButtons::LEFT);
+        let should_close =
+            overlay.handle_mouse_for_test(CONTENT_START_X, ROW_START_Y + 1, MouseButtons::LEFT);
         assert!(!should_close);
         assert_eq!(overlay.selected_label_for_test(), Some("Worker"));
 
-        let should_close = overlay.handle_mouse_for_test(0, ROW_START_Y + 1, MouseButtons::LEFT);
+        let should_close =
+            overlay.handle_mouse_for_test(CONTENT_START_X, ROW_START_Y + 1, MouseButtons::LEFT);
         assert!(should_close);
     }
 

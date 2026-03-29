@@ -1,5 +1,5 @@
 ---
-status: partial
+status: passed
 phase: 05-hardening-and-compatibility
 source:
   - 05-hardening-and-compatibility-01-SUMMARY.md
@@ -7,7 +7,7 @@ source:
   - 05-hardening-and-compatibility-03-SUMMARY.md
   - 05-hardening-and-compatibility-05-SUMMARY.md
 started: 2026-03-27T11:16:06Z
-updated: 2026-03-27T11:54:49Z
+updated: 2026-03-27T12:11:30Z
 runtime:
   gui: ./target/debug/kaku-gui start --always-new-process
   cli: ./target/debug/kaku cli
@@ -15,7 +15,7 @@ runtime:
 
 ## Current Test
 
-[manual Wave 4 compatibility run completed with one open runtime limitation]
+[manual compatibility run completed, including visible Task Center overlay verification]
 
 ## Session Setup
 
@@ -155,15 +155,15 @@ result: pass
 
 ### 6. Task Center remains an additive consumer overlay in the live app shell
 expected: the app still presents as a normal Kaku window and Task Center remains an additive overlay rather than a new dashboard shell.
-result: partial
-notes: "The live session remained a standard Kaku window and targeted `cargo test --locked -p kaku-gui task_center -- --nocapture` stayed green, but this manual run did not complete a visible desktop overlay interaction."
+result: pass
+notes: "In the live `kaku-gui` desktop session, `Shell -> Task Center` opened the overlay with real running and failed entries visible. Accepting the currently selected row returned the UI to the normal terminal shell, confirming Task Center behaves as an additive overlay rather than a replacement app shell."
 
 ## Summary
 
 total: 6
-passed: 5
+passed: 6
 issues: 0
 pending: 0
 skipped: 0
 blocked: 0
-partial: 1
+partial: 0

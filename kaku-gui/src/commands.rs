@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use window::{KeyCode, Modifiers};
+use window::{KeyCode, Modifiers, UIKeyCapRendering};
 use KeyAssignment::*;
 
 /// Describes an argument/parameter/context that is required
@@ -79,6 +79,12 @@ pub struct ExpandedCommand {
     pub icon: Option<Cow<'static, str>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ShortcutStripEntry {
+    pub label: Cow<'static, str>,
+    pub shortcut: String,
+}
+
 impl std::fmt::Debug for CommandDef {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         fmt.debug_struct("CommandDef")
@@ -91,6 +97,44 @@ impl std::fmt::Debug for CommandDef {
 }
 
 impl CommandDef {
+    fn shortcut_key_display(key_display: String, ui_rendering: UIKeyCapRendering) -> String {
+        if ui_rendering == UIKeyCapRendering::AppleSymbols {
+            match key_display.as_str() {
+                "\u{21de}" => return "Fn \u{2191}".to_string(),
+                "\u{21df}" => return "Fn \u{2193}".to_string(),
+                _ => {}
+            }
+        }
+        key_display
+    }
+
+    pub fn format_shortcut(
+        mods: Modifiers,
+        keycode: &KeyCode,
+        ui_rendering: UIKeyCapRendering,
+    ) -> String {
+        let separator = if ui_rendering == UIKeyCapRendering::AppleSymbols {
+            " "
+        } else {
+            " + "
+        };
+        let mod_string = mods.to_string_with_separator(::window::ModifierToStringArgs {
+            separator,
+            want_none: false,
+            ui_key_cap_rendering: Some(ui_rendering),
+        });
+        let key_display = Self::shortcut_key_display(
+            crate::inputmap::ui_key(keycode, ui_rendering),
+            ui_rendering,
+        );
+
+        if mod_string.is_empty() {
+            key_display
+        } else {
+            format!("{mod_string}{separator}{key_display}")
+        }
+    }
+
     /// Blech. Depending on the OS, a shifted key combination
     /// such as CTRL-SHIFT-L may present as either:
     /// CTRL+SHIFT + mapped lowercase l
@@ -214,6 +258,7 @@ impl CommandDef {
         // Only include core actions, not dynamic domain/workspace/launch_menu commands
         let core_actions = [
             // Shell menu
+            ShowTaskCenter,
             SpawnWindow,
             SpawnTab(SpawnTabDomain::CurrentPaneDomain),
             SplitHorizontal(SpawnCommand::default()),
@@ -355,6 +400,7 @@ impl CommandDef {
                     | SplitVertical(_)
                     | Search(_)
                     | QuickSelect
+                    | ShowTaskCenter
                     | ShowLauncher
                     | ShowLauncherArgs(_)
                     | ShowTabNavigator
@@ -370,6 +416,10 @@ impl CommandDef {
                     if name == "kaku-launch-lazygit"
                         || name == "kaku-launch-yazi"
                         || name == "run-kaku-ai-config"
+                        || name == "kaku-task-center-inbox"
+                        || name == "kaku-task-center-running"
+                        || name == "kaku-task-center-failed"
+                        || name == "kaku-task-center-metadata"
             )
         }
 
@@ -634,6 +684,48 @@ impl CommandDef {
         result
     }
 
+    pub fn shell_shortcut_strip_entries(config: &ConfigHandle) -> Vec<ShortcutStripEntry> {
+        let commands = Self::actions_for_palette_and_menubar(config);
+        let ui_rendering = config.ui_key_cap_rendering;
+        let desired = [
+            ("NEW SHELL", SpawnTab(SpawnTabDomain::CurrentPaneDomain)),
+            (
+                "SPLIT RIGHT",
+                SplitVertical(SpawnCommand {
+                    domain: SpawnTabDomain::CurrentPaneDomain,
+                    ..Default::default()
+                }),
+            ),
+            (
+                "SPLIT DOWN",
+                SplitHorizontal(SpawnCommand {
+                    domain: SpawnTabDomain::CurrentPaneDomain,
+                    ..Default::default()
+                }),
+            ),
+            ("INBOX", EmitEvent("kaku-task-center-inbox".to_string())),
+            ("RUN", EmitEvent("kaku-task-center-running".to_string())),
+            ("FAIL", EmitEvent("kaku-task-center-failed".to_string())),
+            ("META", EmitEvent("kaku-task-center-metadata".to_string())),
+            ("TASKS", ShowTaskCenter),
+            ("PALETTE", ActivateCommandPalette),
+            ("LAUNCHER", ShowLauncher),
+        ];
+
+        desired
+            .iter()
+            .filter_map(|(label, action)| {
+                let command = commands.iter().find(|command| command.action == *action)?;
+                let (mods, keycode) = command.keys.first()?;
+                Some(ShortcutStripEntry {
+                    label: Cow::Borrowed(*label),
+                    shortcut: Self::format_shortcut(*mods, keycode, ui_rendering)
+                        .to_ascii_uppercase(),
+                })
+            })
+            .collect()
+    }
+
     #[cfg(not(target_os = "macos"))]
     pub fn recreate_menubar(_config: &ConfigHandle) {}
 
@@ -712,9 +804,14 @@ impl CommandDef {
                     EmitEvent(name) if name == "kaku-launch-lazygit" => 22,
                     EmitEvent(name) if name == "kaku-launch-yazi" => 23,
                     EmitEvent(name) if name == "kaku-open-remote-files" => 24,
+                    EmitEvent(name) if name == "kaku-task-center-inbox" => 25,
                     SplitVertical(_) | SplitHorizontal(_) | SplitPane(_) => 30,
                     CloseCurrentTab { .. } | CloseCurrentPane { .. } => 40,
-                    ActivateCommandPalette => 25,
+                    ActivateCommandPalette => 26,
+                    ShowTaskCenter => 26,
+                    EmitEvent(name) if name == "kaku-task-center-running" => 27,
+                    EmitEvent(name) if name == "kaku-task-center-failed" => 28,
+                    EmitEvent(name) if name == "kaku-task-center-metadata" => 29,
                     ShowLauncher | ShowLauncherArgs(_) => 50,
                     AttachDomain(_) => 70,
                     DetachDomain(_) => 80,
@@ -1555,6 +1652,46 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
                     menubar: &["Shell"],
                     icon: None,
                 }
+            } else if name == "kaku-task-center-inbox" {
+                CommandDef {
+                    brief: "Inbox".into(),
+                    doc: "Open the task center scoped to unread work in the current workspace"
+                        .into(),
+                    keys: vec![(Modifiers::SUPER.union(Modifiers::ALT), "j".into())],
+                    args: &[ArgType::ActiveWindow],
+                    menubar: &["Shell"],
+                    icon: None,
+                }
+            } else if name == "kaku-task-center-running" {
+                CommandDef {
+                    brief: "Running Work".into(),
+                    doc: "Open the task center scoped to running work in the current workspace"
+                        .into(),
+                    keys: vec![(Modifiers::SUPER.union(Modifiers::ALT), "r".into())],
+                    args: &[ArgType::ActiveWindow],
+                    menubar: &["Shell"],
+                    icon: None,
+                }
+            } else if name == "kaku-task-center-failed" {
+                CommandDef {
+                    brief: "Failed Work".into(),
+                    doc: "Open the task center scoped to failed work in the current workspace"
+                        .into(),
+                    keys: vec![(Modifiers::SUPER.union(Modifiers::ALT), "f".into())],
+                    args: &[ArgType::ActiveWindow],
+                    menubar: &["Shell"],
+                    icon: None,
+                }
+            } else if name == "kaku-task-center-metadata" {
+                CommandDef {
+                    brief: "Workspace Metadata".into(),
+                    doc: "Open the task center scoped to workspace metadata in the current workspace"
+                        .into(),
+                    keys: vec![(Modifiers::SUPER.union(Modifiers::ALT), "m".into())],
+                    args: &[ArgType::ActiveWindow],
+                    menubar: &["Shell"],
+                    icon: None,
+                }
             } else {
                 CommandDef {
                     brief: format!("Emit event `{name}`").into(),
@@ -2104,6 +2241,14 @@ pub fn derive_command_from_key_assignment(action: &KeyAssignment) -> Option<Comm
             menubar: &[],
             icon: None,
         },
+        ShowTaskCenter => CommandDef {
+            brief: "Task Center".into(),
+            doc: "Open the task center overlay".into(),
+            keys: vec![(Modifiers::SUPER.union(Modifiers::SHIFT), "j".into())],
+            args: &[ArgType::ActiveWindow],
+            menubar: &["Shell"],
+            icon: None,
+        },
         ShowTabNavigator => CommandDef {
             brief: "Tab Navigator".into(),
             doc: "Interactive tab switcher".into(),
@@ -2511,6 +2656,11 @@ fn compute_default_actions() -> Vec<KeyAssignment> {
         EmitEvent("kaku-launch-lazygit".to_string()),
         EmitEvent("kaku-launch-yazi".to_string()),
         EmitEvent("kaku-open-remote-files".to_string()),
+        EmitEvent("kaku-task-center-inbox".to_string()),
+        EmitEvent("kaku-task-center-running".to_string()),
+        EmitEvent("kaku-task-center-failed".to_string()),
+        EmitEvent("kaku-task-center-metadata".to_string()),
+        ShowTaskCenter,
         SplitVertical(SpawnCommand {
             domain: SpawnTabDomain::CurrentPaneDomain,
             ..Default::default()
@@ -2670,5 +2820,70 @@ mod tests {
         assert!(CommandDef::default_key_assignments(&config)
             .iter()
             .any(|(_, _, action)| *action == KeyAssignment::ToggleAllPanesInputBroadcast));
+    }
+
+    #[test]
+    fn show_task_center_has_default_shortcut() {
+        let cmd =
+            derive_command_from_key_assignment(&KeyAssignment::ShowTaskCenter).expect("command");
+
+        assert_eq!(
+            cmd.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::SHIFT), "j".into())]
+        );
+    }
+
+    #[test]
+    fn workspace_scoped_task_center_filters_have_default_shortcuts() {
+        let inbox = derive_command_from_key_assignment(&KeyAssignment::EmitEvent(
+            "kaku-task-center-inbox".to_string(),
+        ))
+        .expect("inbox command");
+        let running = derive_command_from_key_assignment(&KeyAssignment::EmitEvent(
+            "kaku-task-center-running".to_string(),
+        ))
+        .expect("running command");
+        let failed = derive_command_from_key_assignment(&KeyAssignment::EmitEvent(
+            "kaku-task-center-failed".to_string(),
+        ))
+        .expect("failed command");
+        let metadata = derive_command_from_key_assignment(&KeyAssignment::EmitEvent(
+            "kaku-task-center-metadata".to_string(),
+        ))
+        .expect("metadata command");
+
+        assert_eq!(
+            inbox.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::ALT), "j".into())]
+        );
+        assert_eq!(
+            running.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::ALT), "r".into())]
+        );
+        assert_eq!(
+            failed.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::ALT), "f".into())]
+        );
+        assert_eq!(
+            metadata.keys,
+            vec![(Modifiers::SUPER.union(Modifiers::ALT), "m".into())]
+        );
+    }
+
+    #[test]
+    fn shell_shortcut_strip_contains_kaku_shell_affordances() {
+        let config = ConfigHandle::default_config();
+        let entries = CommandDef::shell_shortcut_strip_entries(&config);
+        let labels = entries
+            .iter()
+            .map(|entry| entry.label.as_ref())
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"NEW SHELL"));
+        assert!(labels.contains(&"INBOX"));
+        assert!(labels.contains(&"RUN"));
+        assert!(labels.contains(&"FAIL"));
+        assert!(labels.contains(&"META"));
+        assert!(labels.contains(&"TASKS"));
     }
 }

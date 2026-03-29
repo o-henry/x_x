@@ -191,11 +191,23 @@ impl NotificationStore {
         changed
     }
 
-    pub fn unread_count_for_tab(&self, _tab_id: TabId, pane_ids: &[PaneId]) -> usize {
+    pub fn unread_count_for_tab(
+        &self,
+        _tab_id: TabId,
+        workspace: &str,
+        pane_ids: &[PaneId],
+    ) -> usize {
         let pane_ids: HashSet<PaneId> = pane_ids.iter().copied().collect();
         self.notifications
             .values()
-            .filter(|entry| entry.record.unread && pane_ids.contains(&entry.anchor_pane_id))
+            .filter(|entry| {
+                entry.record.unread
+                    && (pane_ids.contains(&entry.anchor_pane_id)
+                        || (entry.record.workspace == workspace
+                            && entry.record.window_id.is_none()
+                            && entry.record.tab_id.is_none()
+                            && entry.record.pane_id.is_none()))
+            })
             .count()
     }
 
@@ -530,6 +542,42 @@ mod tests {
         assert_eq!(
             store.prev_unread_pane(&pane_order, Some(PaneId::new(402))),
             Some(PaneId::new(401))
+        );
+    }
+
+    #[test]
+    fn unread_count_for_tab_includes_workspace_only_notifications_for_same_workspace() {
+        let mut store = NotificationStore::new();
+        store.create_notification(
+            sample_record(
+                "workspace-only",
+                "alpha",
+                None,
+                None,
+                None,
+                NotificationUnreadMode::Sticky,
+            ),
+            PaneId::new(401),
+        );
+        store.create_notification(
+            sample_record(
+                "other-tab-pane",
+                "alpha",
+                Some(11),
+                Some(TabId::new(22)),
+                Some(PaneId::new(402)),
+                NotificationUnreadMode::Sticky,
+            ),
+            PaneId::new(402),
+        );
+
+        assert_eq!(
+            store.unread_count_for_tab(TabId::new(21), "alpha", &[PaneId::new(999)]),
+            1
+        );
+        assert_eq!(
+            store.unread_count_for_tab(TabId::new(21), "beta", &[PaneId::new(999)]),
+            0
         );
     }
 }

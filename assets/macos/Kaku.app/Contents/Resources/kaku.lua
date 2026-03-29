@@ -164,26 +164,13 @@ end
 -- low resolution screens use smaller spacing and 15px font.
 -- high resolution screens use default spacing and 17px font.
 local function is_low_resolution_screen()
-  local success, screens = pcall(function()
-    return wezterm.gui.screens()
-  end)
-  if success and screens and screens.main then
-    local main = screens.main
-    local width = tonumber(main.width or 0) or 0
-    local height = tonumber(main.height or 0) or 0
-    local short_edge = math.min(width, height)
-    -- Inline builtin screen detection.
-    local name = string.lower(tostring(main.name or ''))
-    local is_builtin = name == 'color lcd'
-      or string.find(name, 'built-in', 1, true)
-      or string.find(name, 'built in', 1, true)
-      or string.find(name, '内建', 1, true)
-    if short_edge > 0 then
-      if is_builtin then
-        return short_edge <= 1700
-      end
-      return short_edge < 1800
-    end
+  -- Avoid `wezterm.gui.screens()` during config load.
+  -- On this local fork, spawning a new window/tab while reloading the bundled
+  -- config can recurse through deferred setup and overflow the Lua stack.
+  -- Keep startup safe and allow an explicit opt-in override when needed.
+  local forced = os.getenv('KAKU_LOW_RESOLUTION_SCREEN')
+  if forced == '1' or forced == 'true' then
+    return true
   end
   return false
 end
@@ -2510,6 +2497,45 @@ local function clear_tab_bells(tab)
   end
 end
 
+local function workspace_metadata_suffix(tab)
+  local status = tab.workspace_status
+  local progress = tab.workspace_progress
+
+  if status and progress ~= nil then
+    return ' · [' .. status .. '] ' .. tostring(progress) .. '%'
+  end
+  if status then
+    return ' · [' .. status .. ']'
+  end
+  if progress ~= nil then
+    return ' · ' .. tostring(progress) .. '%'
+  end
+  return ''
+end
+
+local function metadata_aware_tab_title(tab, text, max_width)
+  local budget = math.max(8, max_width - 2)
+  local prefix = ''
+  if tab.unread_notification_count and tab.unread_notification_count > 0 then
+    prefix = '! '
+  end
+
+  local suffix = workspace_metadata_suffix(tab)
+  local prefix_len = #prefix
+  local suffix_len = utf8.len(suffix) or #suffix
+
+  if suffix == '' then
+    return prefix .. wezterm.truncate_right(text, math.max(1, budget - prefix_len))
+  end
+
+  if prefix_len + suffix_len >= budget then
+    return prefix .. wezterm.truncate_right(suffix, math.max(1, budget - prefix_len))
+  end
+
+  local base_budget = math.max(1, budget - prefix_len - suffix_len)
+  return prefix .. wezterm.truncate_right(text, base_budget) .. suffix
+end
+
 wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, max_width)
   -- Evict stale cache only on the first tab to avoid O(n²) across the render cycle
   if tab.tab_index == 0 then
@@ -2542,7 +2568,7 @@ wezterm.on('format-tab-title', function(tab, tabs, _, effective_config, hover, m
   if active_pane and active_pane.is_zoomed then
     text = text .. ' [Z]'
   end
-  text = wezterm.truncate_right(text, math.max(8, max_width - 2))
+  text = metadata_aware_tab_title(tab, text, max_width)
 
   local intensity = tab.is_active and 'Bold' or 'Normal'
   -- resolved_palette.tab_bar and its sub-fields are all optional; guard each level
@@ -2866,8 +2892,28 @@ local function build_font_config(is_light)
   local base_weight = is_light and 'Medium' or 'Regular'
   local bold_weight = is_light and 'SemiBold' or 'Medium'
 
+  local dm_mono_dir = os.getenv('HOME') and (os.getenv('HOME') .. '/Documents/asset/FONT/DM_Mono') or nil
+  if dm_mono_dir then
+    local probe = io.open(dm_mono_dir .. '/DMMono-Regular.ttf', 'r')
+    if probe then
+      probe:close()
+      config.font_dirs = config.font_dirs or {}
+      local found = false
+      for _, dir in ipairs(config.font_dirs) do
+        if dir == dm_mono_dir then
+          found = true
+          break
+        end
+      end
+      if not found then
+        table.insert(config.font_dirs, dm_mono_dir)
+      end
+    end
+  end
+
   local font = wezterm.font_with_fallback({
-    { family = 'JetBrains Mono', weight = base_weight },
+    { family = 'DM Mono', weight = base_weight },
+    { family = 'Symbols Nerd Font Mono' },
     { family = 'PingFang SC', weight = base_weight },
     'Apple Color Emoji',
   })
@@ -2877,7 +2923,8 @@ local function build_font_config(is_light)
     {
       intensity = 'Half',
       font = wezterm.font_with_fallback({
-        { family = 'JetBrains Mono', weight = base_weight },
+        { family = 'DM Mono', weight = base_weight },
+        { family = 'Symbols Nerd Font Mono' },
         { family = 'PingFang SC', weight = base_weight },
       }),
     },
@@ -2886,7 +2933,8 @@ local function build_font_config(is_light)
       intensity = 'Normal',
       italic = true,
       font = wezterm.font_with_fallback({
-        { family = 'JetBrains Mono', weight = base_weight, italic = false },
+        { family = 'DM Mono', weight = base_weight, italic = false },
+        { family = 'Symbols Nerd Font Mono' },
         { family = 'PingFang SC', weight = base_weight },
       }),
     },
@@ -2894,7 +2942,8 @@ local function build_font_config(is_light)
     {
       intensity = 'Bold',
       font = wezterm.font_with_fallback({
-        { family = 'JetBrains Mono', weight = bold_weight },
+        { family = 'DM Mono', weight = bold_weight },
+        { family = 'Symbols Nerd Font Mono' },
         { family = 'PingFang SC', weight = bold_weight },
       }),
     },
@@ -2988,18 +3037,6 @@ config.bold_brightens_ansi_colors = false
 local function get_font_size()
   if low_resolution_screen then
     return 15.0
-  end
-
-  local success, screens = pcall(function()
-    return wezterm.gui.screens()
-  end)
-  if success and screens and screens.main then
-    local main = screens.main
-    -- Fallback when pixel dimensions are unavailable.
-    local dpi = tonumber(main.effective_dpi or 72) or 72
-    if dpi < 110 then
-      return 15.0
-    end
   end
   return 17.0
 end
@@ -3582,6 +3619,13 @@ config.keys = {
     key = 'S',
     mods = 'CMD|SHIFT',
     action = wezterm.action.TogglePaneSplitDirection,
+  },
+
+  -- Cmd+Shift+J: Open Task Center overlay
+  {
+    key = 'J',
+    mods = 'CMD|SHIFT',
+    action = wezterm.action.ShowTaskCenter,
   },
 
   -- Cmd+Ctrl+Arrows: Resize panes

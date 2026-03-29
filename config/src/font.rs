@@ -437,7 +437,7 @@ impl FontAttributes {
 impl Default for FontAttributes {
     fn default() -> Self {
         Self {
-            family: "JetBrains Mono".into(),
+            family: "DM Mono".into(),
             weight: FontWeight::default(),
             stretch: FontStretch::default(),
             style: FontStyle::Normal,

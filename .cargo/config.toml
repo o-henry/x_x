@@ -1,5 +1,6 @@
 [build]
 rustflags = ["-A", "unexpected_cfgs"]
+target-dir = "/tmp/x_x-target"
 
 [env]
 # Keep C/C++ vendored dependencies aligned with Rust's macOS minimum target

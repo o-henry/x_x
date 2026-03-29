@@ -117,6 +117,13 @@ impl TaskCenterScope {
         }
     }
 
+    fn for_workspace_query(workspace: impl Into<String>, query: impl Into<String>) -> Self {
+        Self {
+            workspace: Some(workspace.into()),
+            query: Some(query.into()),
+        }
+    }
+
     fn with_query(query: impl Into<String>) -> Self {
         Self {
             workspace: None,
@@ -136,10 +143,8 @@ pub enum OperatorNavItem {
 }
 
 impl OperatorNavItem {
-    pub fn ordered() -> [OperatorNavItem; 6] {
+    pub fn ordered() -> [OperatorNavItem; 4] {
         [
-            OperatorNavItem::Home,
-            OperatorNavItem::Inbox,
             OperatorNavItem::Running,
             OperatorNavItem::Failed,
             OperatorNavItem::Metadata,
@@ -241,7 +246,7 @@ const VSCODE_OPEN_CANDIDATES: &[&str] = &[
 ];
 
 const TOP_TAB_LAYOUT_FULLSCREEN_STICKY_MS: u64 = 160;
-const OPERATOR_NAV_WIDTH_PX: usize = 72;
+const OPERATOR_NAV_WIDTH_PX: usize = 196;
 const OPERATOR_NAV_MIN_WINDOW_WIDTH: usize = 680;
 
 #[derive(Clone, Debug)]
@@ -2625,6 +2630,9 @@ impl TermWindow {
 
 impl TermWindow {
     pub(crate) fn operator_nav_enabled(&self) -> bool {
+        if std::env::var_os("KAKU_DISABLE_OPERATOR_NAV").is_some() {
+            return false;
+        }
         self.dimensions.pixel_width >= OPERATOR_NAV_MIN_WINDOW_WIDTH
     }
 
@@ -2643,7 +2651,7 @@ impl TermWindow {
         } else {
             0
         };
-        resize::effective_vertical_padding(
+        let (mut top, mut bottom) = resize::effective_vertical_padding(
             &self.config,
             DimensionContext {
                 dpi: self.dimensions.dpi as f32,
@@ -2654,7 +2662,14 @@ impl TermWindow {
             self.config.tab_bar_at_bottom,
             tab_bar_height,
             self.layout_uses_edge_to_edge_padding(),
-        )
+        );
+
+        if self.operator_nav_enabled() && self.show_tab_bar && !self.config.tab_bar_at_bottom {
+            top = top.saturating_sub(4);
+            bottom = bottom.min(2);
+        }
+
+        (top, bottom)
     }
 
     /// Decide whether the tab bar should be visible based on tab count,
@@ -2669,6 +2684,7 @@ impl TermWindow {
             num_tabs,
             has_unread_notifications,
             has_workspace_metadata,
+            self.operator_nav_enabled(),
         )
     }
 
@@ -2704,9 +2720,14 @@ impl TermWindow {
         num_tabs: usize,
         has_unread_notifications: bool,
         has_workspace_metadata: bool,
+        operator_nav_enabled: bool,
     ) -> bool {
         if !enable_tab_bar {
             return false;
+        }
+
+        if operator_nav_enabled {
+            return true;
         }
 
         if is_full_screen || has_unread_notifications || has_workspace_metadata {
@@ -3142,12 +3163,20 @@ impl TermWindow {
             .map(|window| window.get_workspace().to_string())
     }
 
+    fn operator_nav_scope_for(&self, item: OperatorNavItem) -> TaskCenterScope {
+        match (item.query(), self.current_workspace_name()) {
+            (None, Some(workspace)) => TaskCenterScope::for_workspace(workspace),
+            (Some(query), Some(workspace)) => {
+                TaskCenterScope::for_workspace_query(workspace, query)
+            }
+            (Some(query), None) => TaskCenterScope::with_query(query),
+            (None, None) => TaskCenterScope::default(),
+        }
+    }
+
     pub(crate) fn activate_operator_nav(&mut self, item: OperatorNavItem) {
         self.operator_nav_selection = item;
-        match item.query() {
-            Some(query) => self.show_task_center_with_scope(TaskCenterScope::with_query(query)),
-            None => self.show_task_center(),
-        }
+        self.show_task_center_with_scope(self.operator_nav_scope_for(item));
     }
 
     fn workspace_status_cache_from_records(
@@ -4151,6 +4180,10 @@ impl TermWindow {
         self.show_task_center_with_scope(TaskCenterScope::with_query(query));
     }
 
+    fn show_operator_nav_scope(&mut self, item: OperatorNavItem) {
+        self.activate_operator_nav(item);
+    }
+
     fn show_task_center_with_scope(&mut self, scope: TaskCenterScope) {
         let mux = Mux::get();
         let Some(tab) = mux.get_active_tab_for_window(self.mux_window_id) else {
@@ -4673,6 +4706,14 @@ impl TermWindow {
                     pane.writer().write_all(b"kaku\n")?;
                 } else if name == "run-kaku-ai-config" {
                     pane.writer().write_all(b"kaku ai\n")?;
+                } else if name == "kaku-task-center-inbox" {
+                    self.show_operator_nav_scope(OperatorNavItem::Inbox);
+                } else if name == "kaku-task-center-running" {
+                    self.show_operator_nav_scope(OperatorNavItem::Running);
+                } else if name == "kaku-task-center-failed" {
+                    self.show_operator_nav_scope(OperatorNavItem::Failed);
+                } else if name == "kaku-task-center-metadata" {
+                    self.show_operator_nav_scope(OperatorNavItem::Metadata);
                 } else if let Some(msg) = lookup_kaku_toast(name) {
                     self.show_toast(msg.to_string());
                 } else if name == "kaku-toast-ai-analyzing" {
@@ -6267,8 +6308,8 @@ mod tests {
     #[test]
     fn operator_nav_width_matches_slim_rail_contract() {
         assert!(
-            OPERATOR_NAV_WIDTH_PX <= 76,
-            "operator rail width should stay slim and edge-attached"
+            OPERATOR_NAV_WIDTH_PX >= 160,
+            "operator rail should now have enough width for persistent workspace/inbox chrome"
         );
         assert!(
             OPERATOR_NAV_MIN_WINDOW_WIDTH > OPERATOR_NAV_WIDTH_PX,
@@ -6430,21 +6471,28 @@ mod tests {
     #[test]
     fn single_tab_with_unread_notifications_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, true, false
+            true, true, false, 1, true, false, false
         ));
     }
 
     #[test]
     fn single_tab_without_unread_notifications_still_respects_hide_setting() {
         assert!(!TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, false, false
+            true, true, false, 1, false, false, false
         ));
     }
 
     #[test]
     fn single_tab_with_workspace_metadata_forces_tab_bar_visible() {
         assert!(TermWindow::should_show_tab_bar_impl(
-            true, true, false, 1, false, true
+            true, true, false, 1, false, true, false
+        ));
+    }
+
+    #[test]
+    fn operator_nav_mode_forces_top_chrome_visible_even_with_single_tab() {
+        assert!(TermWindow::should_show_tab_bar_impl(
+            true, true, false, 1, false, false, true
         ));
     }
 

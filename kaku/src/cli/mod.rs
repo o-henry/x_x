@@ -23,18 +23,24 @@ mod list_clients;
 mod list_log;
 mod list_notifications;
 mod list_status;
+mod list_task_panes;
 mod log;
 mod mark_read;
 mod mark_unread;
 mod move_pane_to_new_tab;
 mod notify;
+mod pipe_pane;
 mod proxy;
 mod rename_workspace;
+mod rerun_pane;
+mod respawn_pane;
 mod send_text;
 mod set_progress;
+mod set_remain_on_exit;
 mod set_status;
 mod set_tab_title;
 mod set_window_title;
+mod silence_watchdog;
 mod spawn_command;
 mod split_pane;
 mod tls_creds;
@@ -196,6 +202,48 @@ enum CliSubCommand {
     ListLog(list_log::ListWorkspaceLogCommand),
 
     #[command(
+        name = "list-task-panes",
+        rename_all = "kebab",
+        about = "list task-pane lifecycle records"
+    )]
+    ListTaskPanes(list_task_panes::ListTaskPanesCommand),
+
+    #[command(
+        name = "set-remain-on-exit",
+        rename_all = "kebab",
+        about = "set pane remain-on-exit intent"
+    )]
+    SetRemainOnExit(set_remain_on_exit::SetRemainOnExitCommand),
+
+    #[command(
+        name = "rerun-pane",
+        rename_all = "kebab",
+        about = "rerun a task pane from durable metadata"
+    )]
+    RerunPane(rerun_pane::RerunPaneCommand),
+
+    #[command(
+        name = "respawn-pane",
+        rename_all = "kebab",
+        about = "respawn a task pane from durable metadata"
+    )]
+    RespawnPane(respawn_pane::RespawnPaneCommand),
+
+    #[command(
+        name = "silence-watchdog",
+        rename_all = "kebab",
+        about = "silence watchdog behavior for a task pane"
+    )]
+    SilenceWatchdog(silence_watchdog::SilenceWatchdogCommand),
+
+    #[command(
+        name = "pipe-pane",
+        rename_all = "kebab",
+        about = "duplicate pane output to a file"
+    )]
+    PipePane(pipe_pane::PipePaneCommand),
+
+    #[command(
         name = "mark-read",
         rename_all = "kebab",
         about = "mark notifications as read"
@@ -325,6 +373,12 @@ async fn run_cli_async(opts: &crate::Opt, cli: CliCommand) -> anyhow::Result<()>
         CliSubCommand::Log(cmd) => cmd.run(client).await,
         CliSubCommand::ClearLog(cmd) => cmd.run(client).await,
         CliSubCommand::ListLog(cmd) => cmd.run(client).await,
+        CliSubCommand::ListTaskPanes(cmd) => cmd.run(client).await,
+        CliSubCommand::SetRemainOnExit(cmd) => cmd.run(client).await,
+        CliSubCommand::RerunPane(cmd) => cmd.run(client).await,
+        CliSubCommand::RespawnPane(cmd) => cmd.run(client).await,
+        CliSubCommand::SilenceWatchdog(cmd) => cmd.run(client).await,
+        CliSubCommand::PipePane(cmd) => cmd.run(client).await,
         CliSubCommand::MarkRead(cmd) => cmd.run(client).await,
         CliSubCommand::MarkUnread(cmd) => cmd.run(client).await,
         CliSubCommand::MovePaneToNewTab(cmd) => cmd.run(client).await,
