@@ -339,8 +339,7 @@ async fn async_run_terminal_gui(
     opts: StartCommand,
     should_publish: bool,
 ) -> anyhow::Result<()> {
-    if let Err(err) = publish_mux_runtime(&crate::termwindow::get_window_class(), should_publish)
-    {
+    if let Err(err) = publish_mux_runtime(&crate::termwindow::get_window_class(), should_publish) {
         log::warn!("{:#}", err);
     }
 

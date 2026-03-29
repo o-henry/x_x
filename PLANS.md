@@ -156,12 +156,113 @@ while preserving vanilla Kaku's feel.
   3. `07-03-PLAN.md` — rebalance the main work-surface hierarchy and stop for a structural screenshot gate before any overlay polish
   4. `07-04-PLAN.md` — refine Task Center only as a secondary surface after the persistent shell structure is approved
   5. `07-05-PLAN.md` — close Phase 07 with regression evidence, screenshot-based UAT, and honest docs on whether the current renderer was sufficient
+  Current service follow-up:
+  port the native-shell-tested workspace/inbox rail ideas back into `kaku-gui`
+  without replacing Kaku's renderer; use the existing `termwindow` operator nav,
+  task-center snapshot data, and workspace metadata cache so the current service
+  gets a persistent workspace row, clearer inbox affordance, and workspace-scoped
+  operator actions instead of overlay-only utility chrome
+  Current service control-strip follow-up:
+  add a full-width bottom shortcut strip to `kaku-gui` using the existing
+  command registry and effective keymap, and back it with workspace-scoped
+  task-center filter actions so the strip reflects real Kaku commands instead
+  of static UI-only labels
 - [ ] Phase 8: native Rust shell replatform on top of the existing Kaku core
   Intended outcome:
   stop forcing the reference UI through the existing `kaku-gui` terminal renderer,
   keep the current Kaku/mux/control-plane runtime as the backend source of truth,
   and build a new Rust-native application shell that owns the persistent rail,
   top chrome, main work surface, and context panes
+  Current session focus:
+  finish the incomplete terminal area so the native shell can be used like the
+  original Kaku service instead of showing a small preview-style PTY block;
+  prioritize a dominant, interactive main terminal surface before any broader
+  shell polish
+  Current polish follow-up:
+  remove duplicate workspace headers inside the main shell pane, rename the
+  primary pane chrome from `TERMINAL` to `SHELL`, equalize the left
+  `WORKSPACES` and `INBOX` rail sections, and stop shell bootstrap commands
+  from leaking visible `PROMPT=` lines into the terminal surface
+  Current implementation step:
+  replace the stopgap ANSI text buffer in the native shell with the repo's
+  real `wezterm_term::Terminal` screen state so the main terminal surface
+  renders from Kaku's actual terminal engine rather than an ad-hoc PTY preview
+  Terminal renderer follow-up:
+  stop using GTK `TextView` line/tag painting for fullscreen TUIs and move the
+  dominant terminal surface onto a custom drawing path so `nvim`-style full
+  background regions render as a continuous canvas instead of visible row bands
+  Immediate layout follow-up:
+  make `cmd+t` grow into real multi-shell splits in the dominant workspace
+  area, move shortcut affordances into a bottom taskbar-style strip, and make
+  `Activity` independently toggleable by keyboard without wasting terminal area
+  Current UI follow-up:
+  stretch the bottom shortcut strip across the full shell width under the left
+  rail, remove visible chip boxes, and make the strip drag-scroll horizontally
+  without exposing a scrollbar
+  Current hardening follow-up:
+  defer `cmd+t` session growth off the GTK action trampoline and shorten
+  terminal-session borrow scopes so action-triggered rerenders stop aborting;
+  upgrade the custom terminal surface from Cairo toy text calls to
+  Pango-shaped text drawing so Korean and fallback glyphs render naturally
+  Current pane-management follow-up:
+  promote the per-terminal path strip into real pane chrome, style it like the
+  rest of the shell headers, and allow drag/drop reordering of terminal panes
+  directly inside the workspace surface
+  Current performance follow-up:
+  stop making `cmd+t` block on synchronous PTY/shell startup and stop leaving
+  orphaned terminal refresh loops alive after rerenders; shell panes should
+  appear immediately, finish booting asynchronously, and tear down their
+  per-widget draw timers once the widget leaves the scene graph
+  Current stabilization follow-up:
+  remove the extra wrapper chrome around live shell panes, make the left
+  `WORKSPACE` row reuse the same titlebar rhythm as `INBOX`, simplify
+  terminal font selection to a real Pango font description that reliably
+  resolves to `DM Mono`, and remove the custom scrollbar CSS that is still
+  provoking GTK slider warnings during startup
+  Current implementation + verification track:
+  1. move native-shell runtime bootstrap off the GTK main thread so cold start
+     no longer produces `응답없음` or hiservices startup aborts during direct runs
+  2. make the shell renderer use one consistent DM Mono-first fallback chain so
+     cursor placement, glyph width, and body text metrics stay aligned
+  3. always show a friendly cwd/title per pane using home-relative `~/...`
+     paths so multi-shell startup state is visible immediately
+  4. implement native-shell pane lifecycle ergonomics before the next wide verification pass:
+     focused pane tracking, focus-next/focus-prev, close-focused-pane, and split affordances
+     that map to the bottom shortcut strip instead of static labels
+  5. verify with user-like runtime attempts after each patch:
+     launch, idle, `CMD+T`, pane reorder, typing, `ls`, `nvim`, close, relaunch
+  5. keep a verifier loop running in parallel so code work and GUI regression
+     checks do not serialize on the main agent
+  Current verification harness follow-up:
+  add a dev-only smoke runner inside `kaku-native-shell` so the app can launch,
+  wait for bootstrap, create panes, inject terminal input, reset, and exit while
+  recording whether the shell survived each step; use this to supplement fragile
+  macOS focus-driven automation whenever live window activation is inconsistent
+  Current verified baseline on 2026-03-29:
+  smoke mode now launches, reaches `startup_online=true`, creates up to four
+  panes, injects terminal text successfully, and emits a completion report; live
+  manual runs now survive at least a 10-second idle window and still respond to
+  `CMD+T` split creation after the recent terminal update and rerender batching
+  passes
+  Latest verified follow-up on 2026-03-29:
+  smoke mode now also confirms `text_rendered_ok=true` and `reset_ok=true`, and
+  direct live verification re-confirmed a friendly shell prompt plus successful
+  `CMD+T` growth to three panes after the shell bootstrap changes
+  Current direct-execution closeout loop:
+  1. launch the app like a user would from a real terminal session, not just
+     via `cargo check`, and treat startup hangs as blocking failures
+  2. verify cold start, idle, `CMD+T`, typing, `ls`, pane focus, pane reorder,
+     `nvim`, relaunch, and repeated split attempts in one loop before claiming
+     any shell work complete
+  3. keep the left `WORKSPACE` row and `INBOX` header on the same titlebar
+     rhythm, remove any extra shell titlebar above the per-pane cwd strip, and
+     let the cwd strip consume the full shell-pane top edge
+  4. prefer event-driven terminal updates over permanent fast polling whenever
+  Current shell-visibility follow-up:
+  remove stray zsh `%` startup artifacts by disabling `PROMPT_EOL_MARK`, and
+  make the left workspace rail plus inbox reflect local native-shell panes
+  directly instead of relying only on mux task-pane/notification records
+     idle performance or `응답없음` reports appear during verification
   Exact files for Phase 8 initial scaffold:
   [Cargo.toml](/Users/henry/Documents/code/vibe/hybrid/x_x/Cargo.toml),
   [PLANS.md](/Users/henry/Documents/code/vibe/hybrid/x_x/PLANS.md),
@@ -182,6 +283,57 @@ while preserving vanilla Kaku's feel.
   MVP exclusions:
   no embedded browser, no new terminal renderer, and no attempt to embed
   `kaku-gui` inside the new shell; initial work is `native shell + Kaku backend bridge`
+
+### Phase 8 Native-Shell Port Checklist
+
+#### Essential Ports
+
+- ~~Rust-native shell crate scaffold exists and boots without depending on `kaku-gui` UI code~~
+- ~~shared Kaku runtime bootstrap is wired into the native shell~~
+- ~~main shell work surface is dominant and no longer a tiny PTY preview block~~
+- ~~`wezterm_term` state is used instead of the earlier ad-hoc ANSI buffer~~
+- ~~custom terminal drawing path replaced GTK `TextView` row-band rendering~~
+- ~~friendly per-pane cwd/title strip is shown with home-relative `~/...` formatting~~
+- ~~multi-shell layout exists for 1/2/3/4 panes~~
+- ~~pane drag/drop reorder exists inside the workspace surface~~
+- ~~pane focus-next / focus-prev / close-focused-pane actions exist~~
+- ~~bottom shortcut strip reflects real native-shell pane actions instead of static placeholders~~
+- ~~native-shell can launch Lazygit, Yazi, `kaku config`, and `kaku doctor` from the focused pane~~
+- ~~pane strip surfaces parseable shell cwd plus last-command failure state, including `NOT FOUND` for missing commands~~
+- ~~two-pane split direction toggle and focused-pane zoom/unzoom exist in the native shell~~
+- ~~workspace rail now uses two-line navigation rows with per-workspace attention indicators, so unread/failure state is visible without opening inbox~~
+- ~~bundled `DMMono Nerd Font` assets are now the default mono family everywhere `DM Mono` was previously used~~
+- shell-suite parity still needs to move beyond the current minimal prompt bootstrap and restore the productivity defaults that matter for daily use
+- pane resize ergonomics still need a native-shell equivalent where they materially improve real workflows
+- cold-start stability must still be hardened until `응답없음` and startup aborts are gone
+- idle and split performance must still be hardened until pane creation no longer feels sluggish
+- split startup cost is now reduced by reusing shared shell bootstrap config per shell family; keep pushing until pane creation feels immediate in live use
+- live `CMD+T` / pane actions must be rechecked after each performance pass on a real app run
+- shortcut-strip natural width inflation was fixed enough to restore live startup width to `1180x820`, but live tool-launch shortcut delivery still needs hardening under real macOS input
+- terminal output backlog loss that degraded TUI rendering was fixed, but `lazygit`/`yazi` still need a final real-keyboard validation pass after shortcut delivery is tightened
+- native-shell rerender path still rebuilds the shell tree too often; move to a persistent host and direct focus updates before deeper renderer optimization
+- terminal pump idle cadence is now relaxed and hidden panes back off further, but full event-driven updates are still the target
+
+#### Replacement Implementations
+
+- ~~persistent left rail and inbox/context panes exist in the native shell~~
+- ~~workspace status / progress / log / unread metadata is surfaced in native-shell side panels~~
+- workspace rows should keep getting richer agent/worktree identity, including stronger agent naming and branch fidelity when multi-agent sessions become primary
+- ~~smoke harness verifies startup, split growth, text injection, rendered output, close-pane, focus-cycle, and reset~~
+- native-shell control plane still needs more direct Kaku parity for operator flows beyond the current rail/context surfaces
+- terminal body font and glyph fallback still need final visual polish for Korean + Nerd Font icon parity
+- cursor placement and live typing alignment still need final verification against real shell usage
+- `nvim`/TUI rendering still needs end-to-end validation after the current performance fixes
+- `nvim`/LazyVim alignment still needs a true cell-grid renderer path; segment-shaped drawing is still causing visible centering drift
+- add an internal startup autorun hook for native-shell verification so fullscreen/live `nvim` checks do not depend on flaky macOS keystroke injection
+- 2026-03-29 finalization pass is focused on four items only: lock `WORKSPACE`/`INBOX` rail rhythm so it stops regressing, enrich workspace rows with branch/status/progress identity, restore more shell-suite defaults inside the minimal bootstrap, and keep shaving visible input lag without reintroducing the width regression
+
+#### Intentional Exclusions / Native Replacements
+
+- full Kaku UI parity is not the goal when a clearer native-shell surface is better for solo multi-agent work
+- original Kaku shortcut shapes may be replaced when a native-shell shortcut is clearer or more ergonomic
+- remote-files and pure terminal-only chrome are not automatic must-port items unless they prove necessary in the native-shell workflow
+- settings, assistant, and operator surfaces can be represented as persistent native panes instead of terminal-only overlays when that improves usability
 
 ## Non-Goals
 
@@ -388,3 +540,15 @@ After each phase:
   - shell buttons visibly mutate real mux-backed state
   - status/progress/log/unread changes are observable in the running UI
   - code compiles and the native shell still boots shared runtime directly
+
+### Current Stabilization Follow-up
+
+- Keep scope tight around `kaku-native-shell` startup and pane reliability.
+- Exact files to change:
+  - `kaku-native-shell/src/lib.rs`
+  - `kaku-native-shell/src/app_controller.rs`
+  - `kaku-native-shell/src/terminal.rs`
+- Work items:
+  - Replace the `adw::Application` activate path with a plain Adwaita window bootstrap so macOS startup stops aborting in the activate trampoline.
+  - Keep native-shell shortcuts on the window/widget path instead of relying on app-level accelerators.
+  - Re-verify `CMD+T` and shell pane lifecycle only after startup is stable.

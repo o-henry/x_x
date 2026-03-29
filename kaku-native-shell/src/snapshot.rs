@@ -2,10 +2,13 @@ use mux::notification_store::NotificationRecord;
 use mux::task_panes::TaskPaneRecord;
 use mux::workspace_state::{WorkspaceLogRecord, WorkspaceProgressRecord, WorkspaceStatusRecord};
 use mux::{Mux, MuxNotification};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WorkspaceSummary {
     pub name: String,
+    pub detail: Option<String>,
     pub unread_count: usize,
     pub running_count: usize,
     pub failed_count: usize,
@@ -133,37 +136,43 @@ impl RuntimeSnapshot {
         let logs = source.list_workspace_log(&active_workspace);
         let workspaces = names
             .iter()
-            .map(|name| WorkspaceSummary {
-                name: name.clone(),
-                unread_count: notifications
+            .map(|name| {
+                let unread_count = notifications
                     .iter()
                     .filter(|record| record.workspace == *name && record.unread)
-                    .count(),
-                running_count: task_panes
+                    .count();
+                let running_count = task_panes
                     .iter()
                     .filter(|record| {
                         record.workspace.as_deref() == Some(name.as_str()) && !record.is_dead
                     })
-                    .count(),
-                failed_count: task_panes
+                    .count();
+                let failed_count = task_panes
                     .iter()
                     .filter(|record| {
                         record.workspace.as_deref() == Some(name.as_str()) && record.is_failed
                     })
-                    .count(),
-                status: statuses
+                    .count();
+                WorkspaceSummary {
+                    name: name.clone(),
+                    detail: workspace_detail(&task_panes, name, running_count, failed_count),
+                    unread_count,
+                    running_count,
+                    failed_count,
+                    status: statuses
                     .iter()
                     .find(|record| record.workspace == *name)
                     .map(|record| record.status.clone()),
-                progress: progresses
+                    progress: progresses
                     .iter()
                     .find(|record| record.workspace == *name)
                     .map(|record| record.value),
-                log_count: if name == &active_workspace {
-                    logs.len()
-                } else {
-                    source.list_workspace_log(name).len()
-                },
+                    log_count: if name == &active_workspace {
+                        logs.len()
+                    } else {
+                        0
+                    },
+                }
             })
             .collect::<Vec<_>>();
 
@@ -177,6 +186,105 @@ impl RuntimeSnapshot {
             logs,
         }
     }
+}
+
+fn workspace_detail(
+    task_panes: &[TaskPaneRecord],
+    workspace: &str,
+    running_count: usize,
+    failed_count: usize,
+) -> Option<String> {
+    let pane = task_panes
+        .iter()
+        .filter(|record| record.workspace.as_deref() == Some(workspace))
+        .max_by_key(|record| (usize::from(!record.is_dead), record.updated_at));
+
+    let location = pane
+        .and_then(|record| record.current_working_dir.as_deref())
+        .and_then(|cwd| git_branch_for_cwd(cwd).or_else(|| Some(friendly_display_path(cwd))));
+
+    let shell_summary = match running_count {
+        0 if failed_count > 0 => Some("FAILED".to_string()),
+        0 => None,
+        1 => Some("1 SHELL".to_string()),
+        n => Some(format!("{n} SHELLS")),
+    };
+
+    let mut parts = Vec::new();
+    if let Some(location) = location {
+        parts.push(location);
+    }
+    if let Some(shell_summary) = shell_summary {
+        parts.push(shell_summary);
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" • "))
+    }
+}
+
+fn git_branch_for_cwd(cwd: &str) -> Option<String> {
+    let mut path = PathBuf::from(cwd.strip_prefix("file://").unwrap_or(cwd));
+    if path.is_file() {
+        path = path.parent()?.to_path_buf();
+    }
+
+    let git_dir = discover_git_dir(&path)?;
+    let head = fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    let head = head.trim();
+    if let Some(reference) = head.strip_prefix("ref: ") {
+        return reference
+            .rsplit('/')
+            .next()
+            .map(|branch| branch.replace('-', " ").to_uppercase());
+    }
+    None
+}
+
+fn discover_git_dir(start: &Path) -> Option<PathBuf> {
+    let mut current = Some(start);
+    while let Some(dir) = current {
+        let dot_git = dir.join(".git");
+        if dot_git.is_dir() {
+            return Some(dot_git);
+        }
+        if dot_git.is_file() {
+            let gitdir = fs::read_to_string(&dot_git).ok()?;
+            let target = gitdir.trim().strip_prefix("gitdir: ")?.trim();
+            let resolved = if Path::new(target).is_absolute() {
+                PathBuf::from(target)
+            } else {
+                dir.join(target)
+            };
+            return Some(resolved);
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+fn friendly_display_path(path: &str) -> String {
+    let without_scheme = path.strip_prefix("file://").unwrap_or(path);
+    let candidate = PathBuf::from(without_scheme);
+    let home = std::env::var("HOME")
+        .ok()
+        .map(PathBuf::from)
+        .or_else(dirs_next::home_dir);
+    if let Some(home) = home {
+        if candidate == home {
+            return "~".to_string();
+        }
+        if let Ok(stripped) = candidate.strip_prefix(&home) {
+            let stripped = stripped.to_string_lossy();
+            if stripped.is_empty() {
+                return "~".to_string();
+            }
+            return format!("~/{}", stripped.trim_start_matches('/'));
+        }
+    }
+    without_scheme.to_string()
 }
 
 pub fn refresh_scope_for_notification(notification: &MuxNotification) -> SnapshotRefreshScope {

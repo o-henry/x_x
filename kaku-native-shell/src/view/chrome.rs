@@ -12,16 +12,20 @@ pub struct ChromeView {
 pub fn build_chrome(snapshot: &RuntimeSnapshot) -> ChromeView {
     let chrome = gtk::Box::new(Orientation::Horizontal, 8);
     chrome.add_css_class("shell-chrome");
-    chrome.set_margin_start(10);
-    chrome.set_margin_end(10);
-    chrome.set_margin_top(2);
+    chrome.set_hexpand(true);
+    chrome.set_margin_start(0);
+    chrome.set_margin_end(6);
+    chrome.set_margin_top(0);
     chrome.set_margin_bottom(0);
 
     let spacer = gtk::Box::new(Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
+    spacer.set_size_request(72, -1);
 
     let active = gtk::Label::new(Some(&active_context_label(snapshot)));
     active.add_css_class("chrome-pill");
+    active.set_margin_end(8);
+    active.set_halign(gtk::Align::End);
 
     let refresh_button = chrome_action_button("Refresh");
     let terminal_button = chrome_action_button("Open Terminal");

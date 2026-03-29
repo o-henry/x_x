@@ -49,10 +49,7 @@ pub fn spawn_mux_server(
     Ok(())
 }
 
-pub fn publish_mux_runtime(
-    window_class: &str,
-    should_publish: bool,
-) -> anyhow::Result<PathBuf> {
+pub fn publish_mux_runtime(window_class: &str, should_publish: bool) -> anyhow::Result<PathBuf> {
     let unix_socket_path = prepare_gui_runtime_env()?;
     spawn_mux_server(unix_socket_path.clone(), should_publish, window_class)?;
     Ok(unix_socket_path)

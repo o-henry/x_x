@@ -1,120 +1,103 @@
-use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
-use crate::terminal::build_terminal_widget;
-use crate::view::{pane_panel, pill};
+use crate::snapshot::RuntimeSnapshot;
+use crate::terminal::{build_terminal_widget, TerminalHandle};
+use gtk::gdk;
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
+use std::cell::Cell;
+use std::rc::Rc;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TwoPaneSplit {
+    #[default]
+    SideBySide,
+    Stacked,
+}
 
 pub struct WorkspacePanelView {
-    pub root: gtk::Box,
+    pub root: gtk::Widget,
+    pub terminal_panes: Vec<TerminalPaneHandle>,
+}
+
+pub struct TerminalPaneHandle {
+    pub index: usize,
+    pub drag_handle: gtk::Box,
+    pub drop_target: gtk::Box,
+    pub focus_target: gtk::DrawingArea,
+    pub close_button: gtk::Button,
 }
 
 pub fn build_workspace_panel(
     snapshot: &RuntimeSnapshot,
     show_terminal_sessions: bool,
+    terminals: &[Rc<TerminalHandle>],
+    split: TwoPaneSplit,
+    zoomed_terminal_index: Option<usize>,
 ) -> WorkspacePanelView {
-    let workspace = current_workspace_summary(snapshot);
-    let body = gtk::Box::new(Orientation::Vertical, 10);
-    body.add_css_class("pane-body");
-    body.add_css_class("pane-content");
-    body.set_margin_start(14);
-    body.set_margin_end(14);
-    body.set_margin_top(14);
-    body.set_margin_bottom(14);
-
-    let title = gtk::Label::new(Some(&workspace.name));
-    title.set_halign(Align::Start);
-    title.add_css_class("workspace-title");
-
-    let summary = gtk::Label::new(Some(&format!(
-        "{} unread  {} running  {} failed  {} logs",
-        workspace.unread_count,
-        workspace.running_count,
-        workspace.failed_count,
-        workspace.log_count
-    )));
-    summary.set_halign(Align::Start);
-    summary.add_css_class("workspace-summary");
-
-    let state_row = gtk::Box::new(Orientation::Horizontal, 8);
-    state_row.set_halign(Align::Start);
-    if let Some(status) = &workspace.status {
-        state_row.append(&pill(status));
+    if show_terminal_sessions {
+        let terminal_area = build_terminal_area(terminals, split, zoomed_terminal_index);
+        let host = gtk::Box::new(Orientation::Vertical, 0);
+        host.add_css_class("pane-surface");
+        host.add_css_class("live-terminal-host");
+        host.set_hexpand(true);
+        host.set_vexpand(true);
+        terminal_area.root.set_hexpand(true);
+        terminal_area.root.set_vexpand(true);
+        host.append(&terminal_area.root);
+        WorkspacePanelView {
+            root: host.upcast(),
+            terminal_panes: terminal_area.panes,
+        }
     } else {
-        state_row.append(&pill("unset"));
+        let root = gtk::Box::new(Orientation::Vertical, 0);
+        root.add_css_class("pane-panel");
+        root.add_css_class("pane-surface");
+        let content = gtk::Box::new(Orientation::Vertical, 12);
+        content.add_css_class("pane-body");
+        content.add_css_class("pane-content");
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+        content.set_margin_top(0);
+        content.set_margin_bottom(0);
+        content.append(&workspace_snapshot_block(snapshot));
+        root.append(&content);
+        WorkspacePanelView {
+            root: root.upcast(),
+            terminal_panes: Vec::new(),
+        }
     }
-    if let Some(progress) = workspace.progress {
-        state_row.append(&pill(&format!("{progress}%")));
-    } else {
-        state_row.append(&pill("unset"));
-    }
-
-    let frame = pane_panel("Workspace", None, Option::<&gtk::Widget>::None);
-
-    let shortcut_legend = gtk::Box::new(Orientation::Vertical, 4);
-    shortcut_legend.add_css_class("shortcut-legend");
-    for (label, accel) in [
-        ("TERMINAL SESSIONS", "CMD+T"),
-        ("WORKSPACES", "CMD+B"),
-        ("METADATA", "CMD+SHIFT+M"),
-        ("STATUS", "CMD+SHIFT+S"),
-        ("CLEAR STATUS", "CMD+SHIFT+X"),
-        ("PROGRESS", "CMD+SHIFT+P"),
-        ("RESET PROGRESS", "CMD+SHIFT+R"),
-        ("APPEND LOG", "CMD+SHIFT+L"),
-    ] {
-        shortcut_legend.append(&shortcut_line(label, accel));
-    }
-
-    body.append(&title);
-    body.append(&summary);
-    body.append(&state_row);
-    body.append(&shortcut_legend);
-    body.append(&workspace_snapshot_block(snapshot, show_terminal_sessions));
-    frame.body.append(&body);
-
-    WorkspacePanelView { root: frame.root }
 }
 
-pub fn workspace_status_tokens(
-    status: Option<&str>,
-    progress: Option<u8>,
-    log_count: usize,
-) -> [String; 3] {
+pub fn build_shortcut_bar() -> gtk::ScrolledWindow {
+    shortcut_bar()
+}
+
+pub fn shortcut_entries() -> [(&'static str, &'static str); 21] {
     [
-        status.unwrap_or("unset").to_string(),
-        format!("{}%", progress.unwrap_or(0)),
-        format!("{}L", log_count),
+        ("NEW SHELL", "CMD+T"),
+        ("SPLIT RIGHT", "CMD+D"),
+        ("SPLIT DOWN", "CMD+SHIFT+D"),
+        ("TOGGLE SPLIT", "CMD+SHIFT+S"),
+        ("ZOOM", "CMD+SHIFT+ENTER"),
+        ("NEXT PANE", "CMD+]"),
+        ("PREV PANE", "CMD+["),
+        ("CLOSE PANE", "CMD+W"),
+        ("LAZYGIT", "CMD+SHIFT+G"),
+        ("YAZI", "CMD+SHIFT+Y"),
+        ("DOCTOR", "CMD+SHIFT+O"),
+        ("CONFIG", "CMD+,"),
+        ("WORKSPACES", "CMD+B"),
+        ("ACTIVITY", "CMD+SHIFT+A"),
+        ("TASKS", "CMD+SHIFT+T"),
+        ("METADATA", "CMD+SHIFT+M"),
+        ("STATUS", "CMD+SHIFT+S"),
+        ("CLEAR", "CMD+SHIFT+X"),
+        ("PROGRESS", "CMD+SHIFT+P"),
+        ("RESET", "CMD+SHIFT+R"),
+        ("LOG", "CMD+SHIFT+L"),
     ]
 }
 
-fn current_workspace_summary(snapshot: &RuntimeSnapshot) -> &WorkspaceSummary {
-    snapshot
-        .workspaces
-        .iter()
-        .find(|summary| summary.name == snapshot.active_workspace)
-        .or_else(|| snapshot.workspaces.first())
-        .expect("at least one workspace summary")
-}
-
-fn shortcut_line(action: &str, combo: &str) -> gtk::Box {
-    let row = gtk::Box::new(Orientation::Horizontal, 8);
-    row.add_css_class("shortcut-line");
-
-    let action_label = gtk::Label::new(Some(action));
-    action_label.set_halign(Align::Start);
-    action_label.set_hexpand(true);
-    action_label.add_css_class("shortcut-action");
-
-    let combo_label = gtk::Label::new(Some(combo));
-    combo_label.set_halign(Align::End);
-    combo_label.add_css_class("shortcut-combo");
-
-    row.append(&action_label);
-    row.append(&combo_label);
-    row
-}
-
-fn workspace_snapshot_block(snapshot: &RuntimeSnapshot, show_terminal_sessions: bool) -> gtk::Box {
+fn workspace_snapshot_block(snapshot: &RuntimeSnapshot) -> gtk::Box {
     let block = gtk::Box::new(Orientation::Vertical, 8);
     block.add_css_class("workspace-block");
 
@@ -168,15 +151,273 @@ fn workspace_snapshot_block(snapshot: &RuntimeSnapshot, show_terminal_sessions: 
         }
     }
 
-    if show_terminal_sessions {
-        block.append(&section_label("TERMINAL SESSIONS"));
-        let terminal_host = build_terminal_widget(current_workspace_raw_cwd(snapshot));
-        terminal_host.set_margin_top(6);
-        terminal_host.set_height_request(220);
-        block.append(&terminal_host);
+    block
+}
+
+struct TerminalAreaView {
+    root: gtk::Widget,
+    panes: Vec<TerminalPaneHandle>,
+}
+
+fn build_terminal_area(
+    terminals: &[Rc<TerminalHandle>],
+    split: TwoPaneSplit,
+    zoomed_terminal_index: Option<usize>,
+) -> TerminalAreaView {
+    if terminals.is_empty() {
+        let empty = gtk::Box::new(Orientation::Vertical, 0);
+        empty.add_css_class("pane-surface");
+        empty.add_css_class("live-terminal-host");
+        empty.set_hexpand(true);
+        empty.set_vexpand(true);
+        return TerminalAreaView {
+            root: empty.upcast(),
+            panes: Vec::new(),
+        };
     }
 
-    block
+    if let Some(index) = zoomed_terminal_index.filter(|index| *index < terminals.len()) {
+        let pane = terminal_surface(index, terminals[index].clone());
+        return TerminalAreaView {
+            root: pane.root.clone().upcast(),
+            panes: vec![pane.handle],
+        };
+    }
+
+    match terminals.len().max(1) {
+        1 => {
+            let pane = terminal_surface(0, terminals[0].clone());
+            TerminalAreaView {
+                root: pane.root.clone().upcast(),
+                panes: vec![pane.handle],
+            }
+        }
+        2 => {
+            let start = terminal_surface(0, terminals[0].clone());
+            let end = terminal_surface(1, terminals[1].clone());
+            let split = match split {
+                TwoPaneSplit::SideBySide => split_horizontal(start.root.clone(), end.root.clone()),
+                TwoPaneSplit::Stacked => split_vertical(start.root.clone(), end.root.clone()),
+            };
+            TerminalAreaView {
+                root: split.upcast(),
+                panes: vec![start.handle, end.handle],
+            }
+        }
+        3 => {
+            let left = terminal_surface(0, terminals[0].clone());
+            let top_right = terminal_surface(1, terminals[1].clone());
+            let bottom_right = terminal_surface(2, terminals[2].clone());
+            let right = split_vertical(top_right.root.clone(), bottom_right.root.clone());
+            let split = split_horizontal(left.root.clone(), right);
+            TerminalAreaView {
+                root: split.upcast(),
+                panes: vec![left.handle, top_right.handle, bottom_right.handle],
+            }
+        }
+        _ => {
+            let top_left = terminal_surface(0, terminals[0].clone());
+            let bottom_left = terminal_surface(1, terminals[1].clone());
+            let top_right = terminal_surface(2, terminals[2].clone());
+            let bottom_right = terminal_surface(3, terminals[3].clone());
+            let left = split_vertical(top_left.root.clone(), bottom_left.root.clone());
+            let right = split_vertical(top_right.root.clone(), bottom_right.root.clone());
+            let split = split_horizontal(left, right);
+            TerminalAreaView {
+                root: split.upcast(),
+                panes: vec![
+                    top_left.handle,
+                    bottom_left.handle,
+                    top_right.handle,
+                    bottom_right.handle,
+                ],
+            }
+        }
+    }
+}
+
+struct TerminalPaneView {
+    root: gtk::Box,
+    handle: TerminalPaneHandle,
+}
+
+fn terminal_surface(index: usize, handle: Rc<TerminalHandle>) -> TerminalPaneView {
+    let terminal_view = build_terminal_widget(handle);
+    terminal_view.root.set_hexpand(true);
+    terminal_view.root.set_vexpand(true);
+    terminal_view
+        .root
+        .add_css_class("workspace-terminal-surface");
+    TerminalPaneView {
+        root: terminal_view.root.clone(),
+        handle: TerminalPaneHandle {
+            index,
+            drag_handle: terminal_view.drag_handle,
+            drop_target: terminal_view.drop_target,
+            focus_target: terminal_view.focus_target,
+            close_button: terminal_view.close_button,
+        },
+    }
+}
+
+fn split_horizontal(start: impl IsA<gtk::Widget>, end: impl IsA<gtk::Widget>) -> gtk::Paned {
+    let split = gtk::Paned::new(Orientation::Horizontal);
+    split.add_css_class("shell-split");
+    split.set_wide_handle(true);
+    split.set_hexpand(true);
+    split.set_vexpand(true);
+    split.set_resize_start_child(true);
+    split.set_resize_end_child(true);
+    split.set_shrink_start_child(false);
+    split.set_shrink_end_child(false);
+    split.set_start_child(Some(&start));
+    split.set_end_child(Some(&end));
+    bind_split_ratio(&split, Orientation::Horizontal, 0.5);
+    split
+}
+
+fn split_vertical(start: impl IsA<gtk::Widget>, end: impl IsA<gtk::Widget>) -> gtk::Paned {
+    let split = gtk::Paned::new(Orientation::Vertical);
+    split.add_css_class("shell-split");
+    split.set_wide_handle(true);
+    split.set_hexpand(true);
+    split.set_vexpand(true);
+    split.set_resize_start_child(true);
+    split.set_resize_end_child(true);
+    split.set_shrink_start_child(false);
+    split.set_shrink_end_child(false);
+    split.set_start_child(Some(&start));
+    split.set_end_child(Some(&end));
+    bind_split_ratio(&split, Orientation::Vertical, 0.5);
+    split
+}
+
+fn bind_split_ratio(split: &gtk::Paned, orientation: Orientation, ratio: f64) {
+    let updater: Rc<dyn Fn()> = {
+        let split = split.clone();
+        Rc::new(move || {
+            let extent = split.max_position().max(match orientation {
+                Orientation::Horizontal => split.width(),
+                Orientation::Vertical => split.height(),
+                _ => 0,
+            });
+            if extent > 0 {
+                split.set_position(((extent as f64) * ratio).round() as i32);
+            }
+        })
+    };
+
+    {
+        let updater = Rc::clone(&updater);
+        glib::idle_add_local_once(move || updater());
+    }
+
+    {
+        let updater = Rc::clone(&updater);
+        split.connect_map(move |_| {
+            let updater = Rc::clone(&updater);
+            glib::idle_add_local_once(move || updater());
+        });
+    }
+
+    let property = match orientation {
+        Orientation::Horizontal => "width",
+        Orientation::Vertical => "height",
+        _ => return,
+    };
+    let property_updater = Rc::clone(&updater);
+    split.connect_notify_local(Some(property), move |_, _| {
+        let updater = Rc::clone(&property_updater);
+        glib::idle_add_local_once(move || updater());
+    });
+    let max_position_updater = Rc::clone(&updater);
+    split.connect_notify_local(Some("max-position"), move |_, _| {
+        let updater = Rc::clone(&max_position_updater);
+        glib::idle_add_local_once(move || updater());
+    });
+}
+
+fn shortcut_bar() -> gtk::ScrolledWindow {
+    let shortcuts = gtk::Box::new(Orientation::Horizontal, 8);
+    shortcuts.add_css_class("shortcut-strip");
+    shortcuts.set_hexpand(true);
+    shortcuts.set_vexpand(false);
+    shortcuts.set_halign(Align::Start);
+    shortcuts.set_valign(Align::Center);
+    shortcuts.set_baseline_position(gtk::BaselinePosition::Center);
+    shortcuts.set_size_request(0, -1);
+
+    let entries = shortcut_entries();
+    for (index, (label, accel)) in entries.iter().enumerate() {
+        shortcuts.append(&shortcut_chip(label, accel));
+        if index + 1 < entries.len() {
+            shortcuts.append(&shortcut_separator());
+        }
+    }
+
+    let scroller = gtk::ScrolledWindow::builder()
+        .hexpand(true)
+        .vexpand(false)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .has_frame(false)
+        .child(&shortcuts)
+        .build();
+    scroller.add_css_class("shortcut-bar");
+    scroller.set_overlay_scrolling(true);
+    scroller.set_kinetic_scrolling(false);
+    scroller.set_min_content_width(0);
+    scroller.set_size_request(0, -1);
+    scroller.set_propagate_natural_width(false);
+    scroller.set_propagate_natural_height(false);
+    scroller.set_halign(Align::Fill);
+    scroller.set_valign(Align::Center);
+
+    let drag_origin = Rc::new(Cell::new(0.0));
+    let scroller_begin = scroller.clone();
+    let drag_origin_begin = Rc::clone(&drag_origin);
+    let drag = gtk::GestureDrag::new();
+    drag.set_button(gdk::BUTTON_PRIMARY);
+    drag.connect_drag_begin(move |_, _, _| {
+        drag_origin_begin.set(scroller_begin.hadjustment().value());
+    });
+    let scroller_update = scroller.clone();
+    let drag_origin_update = Rc::clone(&drag_origin);
+    drag.connect_drag_update(move |_, offset_x, _| {
+        let adjustment = scroller_update.hadjustment();
+        let max_value = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+        let next = (drag_origin_update.get() - offset_x).clamp(adjustment.lower(), max_value);
+        adjustment.set_value(next);
+    });
+    shortcuts.add_controller(drag);
+    scroller
+}
+
+fn shortcut_chip(label: &str, accel: &str) -> gtk::Box {
+    let chip = gtk::Box::new(Orientation::Horizontal, 8);
+    chip.add_css_class("shortcut-chip");
+    chip.set_valign(Align::Center);
+
+    let action = gtk::Label::new(Some(label));
+    action.set_halign(Align::Start);
+    action.set_valign(Align::Center);
+    action.add_css_class("shortcut-action");
+
+    let combo = gtk::Label::new(Some(accel));
+    combo.set_halign(Align::End);
+    combo.set_valign(Align::Center);
+    combo.add_css_class("shortcut-combo");
+
+    chip.append(&action);
+    chip.append(&combo);
+    chip
+}
+
+fn shortcut_separator() -> gtk::Label {
+    let separator = gtk::Label::new(Some("|"));
+    separator.add_css_class("shortcut-separator");
+    separator.set_valign(Align::Center);
+    separator
 }
 
 fn section_label(text: &str) -> gtk::Label {

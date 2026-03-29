@@ -4,9 +4,8 @@ use kaku_native_shell::snapshot::{
     refresh_scope_for_notification, RuntimeSnapshot, RuntimeSnapshotSource, ShellLayoutContract,
     SnapshotRefreshScope, WorkspaceSummary,
 };
-use kaku_native_shell::view::{
-    context_panel_titles, shell_slot_order, workspace_badge_text, workspace_status_tokens,
-};
+use kaku_native_shell::view::workspace::shortcut_entries;
+use kaku_native_shell::view::{context_panel_titles, shell_slot_order};
 use mux::client::ClientId;
 use mux::notification_store::{NotificationRecord, NotificationUnreadMode};
 use mux::pane::PaneId;
@@ -19,8 +18,8 @@ use std::sync::Arc;
 #[test]
 fn shell_layout_contract() {
     let layout = ShellLayoutContract::default();
-    assert_eq!(layout.chrome_height, 46);
-    assert_eq!(layout.rail_width, 176);
+    assert_eq!(layout.chrome_height, 28);
+    assert_eq!(layout.rail_width, 284);
     assert!(layout.section_names().contains(&"chrome"));
     assert!(layout.section_names().contains(&"rail"));
     assert!(layout.section_names().contains(&"main"));
@@ -28,6 +27,7 @@ fn shell_layout_contract() {
 
     let workspace = WorkspaceSummary {
         name: "default".to_string(),
+        detail: Some("MAIN • 2 SHELLS".to_string()),
         unread_count: 1,
         running_count: 2,
         failed_count: 0,
@@ -70,11 +70,7 @@ fn shell_typography_contract() {
     let contract = shell_ui_contract();
     assert_eq!(
         contract.typography.primary_mono_family,
-        [
-            "Basically A Mono",
-            "1984대화나눔_본문체_Regular",
-            "monospace"
-        ]
+        ["DMMono Nerd Font", "1984대화나눔_본문체_Regular", "monospace"]
     );
     assert!(contract
         .typography
@@ -96,17 +92,36 @@ fn shell_affordance_contract() {
         .affordances
         .header_badges
         .iter()
-        .all(|label| label.chars().any(|ch| !ch.is_ascii_alphanumeric())));
-    assert!(contract.affordances.action_labels.contains(&"↻"));
+        .all(|label| label.chars().count() <= 12));
     assert!(contract
         .affordances
-        .action_labels
-        .contains(&"⌂ open terminal"));
-    assert_eq!(workspace_badge_text(1, 2, 0), "1U 2R 0F");
-    assert_eq!(
-        workspace_status_tokens(Some("Building"), Some(70), 5),
-        ["◉ Building", "◔ 70%", "✦ 5L"]
-    );
+        .header_badges
+        .iter()
+        .any(|label| label.chars().any(|ch| !ch.is_ascii_alphanumeric())));
+    assert!(contract.affordances.action_labels.contains(&"↻"));
+    assert!(contract.affordances.action_labels.contains(&"shell"));
+    assert!(contract.affordances.action_labels.contains(&"next"));
+    assert!(contract.affordances.action_labels.contains(&"close"));
+}
+
+#[test]
+fn native_shell_shortcut_strip_tracks_real_pane_actions() {
+    let entries = shortcut_entries();
+    assert!(entries.contains(&("NEW SHELL", "CMD+T")));
+    assert!(entries.contains(&("SPLIT RIGHT", "CMD+D")));
+    assert!(entries.contains(&("SPLIT DOWN", "CMD+SHIFT+D")));
+    assert!(entries.contains(&("TOGGLE SPLIT", "CMD+SHIFT+S")));
+    assert!(entries.contains(&("ZOOM", "CMD+SHIFT+ENTER")));
+    assert!(entries.contains(&("NEXT PANE", "CMD+]")));
+    assert!(entries.contains(&("PREV PANE", "CMD+[")));
+    assert!(entries.contains(&("CLOSE PANE", "CMD+W")));
+    assert!(entries.contains(&("LAZYGIT", "CMD+SHIFT+G")));
+    assert!(entries.contains(&("YAZI", "CMD+SHIFT+Y")));
+    assert!(entries.contains(&("DOCTOR", "CMD+SHIFT+O")));
+    assert!(entries.contains(&("CONFIG", "CMD+,")));
+    assert!(entries.contains(&("CLEAR", "CMD+SHIFT+X")));
+    assert!(entries.contains(&("PROGRESS", "CMD+SHIFT+P")));
+    assert!(entries.contains(&("LOG", "CMD+SHIFT+L")));
 }
 
 #[derive(Clone, Default)]

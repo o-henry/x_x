@@ -3,10 +3,9 @@ pub mod context;
 pub mod rail;
 pub mod workspace;
 
-pub use rail::workspace_badge_text;
-pub use workspace::workspace_status_tokens;
-
 use crate::snapshot::{RuntimeSnapshot, ShellLayoutContract};
+use crate::terminal::TerminalHandle;
+use crate::view::workspace::TwoPaneSplit;
 use glib::value::ToValue;
 use gtk::gdk;
 use gtk::prelude::IsA;
@@ -21,9 +20,14 @@ pub struct PaneArrangement {
     pub metadata_first: bool,
     pub tasks_first: bool,
     pub show_terminal_sessions: bool,
+    pub terminal_count: usize,
+    pub show_activity: bool,
+    pub show_tasks: bool,
     pub show_metadata: bool,
     pub metadata_collapsed: bool,
     pub inbox_collapsed: bool,
+    pub two_pane_split: TwoPaneSplit,
+    pub zoomed_terminal_index: Option<usize>,
 }
 
 pub struct PaneFrame {
@@ -37,6 +41,7 @@ pub struct ShellView {
     pub chrome_drag_handle: gtk::Box,
     pub refresh_button: gtk::Button,
     pub terminal_button: gtk::Button,
+    pub terminal_panes: Vec<workspace::TerminalPaneHandle>,
     pub rail_buttons: Vec<(String, gtk::Button)>,
     pub rail_inbox_toggle_button: gtk::Button,
     pub metadata_toggle_button: gtk::Button,
@@ -67,22 +72,39 @@ pub fn context_panel_titles() -> [&'static str; 4] {
     ["Inbox", "Tasks", "Activity", "Metadata"]
 }
 
+pub fn display_workspace_name(name: &str) -> String {
+    if name == "default" {
+        "WORKSPACE".to_string()
+    } else {
+        name.to_string()
+    }
+}
+
 pub fn build_shell(
     snapshot: &RuntimeSnapshot,
     layout: &ShellLayoutContract,
     rail_collapsed: bool,
     arrangement: PaneArrangement,
+    terminals: &[Rc<TerminalHandle>],
     window_width: i32,
 ) -> ShellView {
     let root = gtk::Box::new(Orientation::Vertical, 0);
     root.add_css_class("shell-root");
+    root.set_hexpand(true);
+    root.set_vexpand(true);
+    root.set_size_request(0, 0);
+    root.set_margin_start(0);
+    root.set_margin_end(0);
+    root.set_margin_top(0);
+    root.set_margin_bottom(0);
 
     let chrome_view = chrome::build_chrome(snapshot);
     chrome_view.root.set_height_request(layout.chrome_height);
-    root.append(&chrome_view.root);
 
     let body = gtk::Box::new(Orientation::Horizontal, 0);
     body.set_vexpand(true);
+    body.set_hexpand(true);
+    body.set_size_request(0, 0);
     body.add_css_class("shell-body");
 
     let rail_width = if rail_collapsed {
@@ -90,7 +112,11 @@ pub fn build_shell(
     } else {
         layout.rail_width
     };
-    let total_width = if window_width > 0 { window_width } else { 1480 };
+    let total_width = if window_width > 0 {
+        window_width.clamp(960, 1600)
+    } else {
+        1180
+    };
     let content_width = (total_width - rail_width).max(900);
     let side_width = ((content_width as f32) * 0.24)
         .round()
@@ -110,27 +136,23 @@ pub fn build_shell(
         body.append(&rail_view.root);
     }
 
-    let center_column = gtk::Paned::new(Orientation::Vertical);
-    center_column.add_css_class("shell-split");
-    center_column.set_wide_handle(true);
-    center_column.set_hexpand(true);
-    center_column.set_vexpand(true);
-    center_column.set_resize_start_child(true);
-    center_column.set_resize_end_child(true);
-    center_column.set_shrink_start_child(false);
-    center_column.set_shrink_end_child(false);
-    center_column.set_position(layout.workspace_split);
-
     let workspace_view =
-        workspace::build_workspace_panel(snapshot, arrangement.show_terminal_sessions);
+        workspace::build_workspace_panel(
+            snapshot,
+            arrangement.show_terminal_sessions,
+            terminals,
+            arrangement.two_pane_split,
+            arrangement.zoomed_terminal_index,
+        );
+    let shortcut_bar = workspace::build_shortcut_bar();
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);
-    workspace_view.root.set_size_request(0, 280);
+    workspace_view.root.set_size_request(0, 0);
     let activity_view = context::build_activity_panel(snapshot);
     let metadata_view = context::build_metadata_panel(snapshot, arrangement.metadata_collapsed);
     activity_view.root.set_hexpand(true);
     activity_view.root.set_vexpand(true);
-    activity_view.root.set_size_request(0, 220);
+    activity_view.root.set_size_request(0, 0);
     metadata_view.root.set_hexpand(false);
     metadata_view
         .root
@@ -144,23 +166,40 @@ pub fn build_shell(
         },
     );
 
-    center_column.set_start_child(Some(&workspace_view.root));
-    center_column.set_end_child(Some(&activity_view.root));
+    let center_root: gtk::Widget = if arrangement.show_activity {
+        let center_column = gtk::Paned::new(Orientation::Vertical);
+        center_column.add_css_class("shell-split");
+        center_column.set_wide_handle(true);
+        center_column.set_hexpand(true);
+        center_column.set_vexpand(true);
+        center_column.set_resize_start_child(true);
+        center_column.set_resize_end_child(true);
+        center_column.set_shrink_start_child(false);
+        center_column.set_shrink_end_child(false);
+        center_column.set_position(layout.workspace_split);
+        center_column.set_start_child(Some(&workspace_view.root));
+        center_column.set_end_child(Some(&activity_view.root));
+        center_column.upcast()
+    } else {
+        workspace_view.root.clone()
+    };
     let task_view = context::build_task_panel(snapshot);
     task_view.root.set_vexpand(true);
     task_view.root.set_hexpand(true);
-    task_view.root.set_size_request(side_width, 180);
+    task_view.root.set_size_request(0, 0);
 
     let side_host = gtk::Box::new(Orientation::Vertical, 0);
     side_host.set_hexpand(false);
     side_host.set_vexpand(true);
-    side_host.set_size_request(side_width, -1);
+    side_host.set_size_request(0, 0);
 
     if arrangement.show_metadata {
         if arrangement.metadata_collapsed {
-            task_view.root.set_vexpand(true);
+            if arrangement.show_tasks {
+                task_view.root.set_vexpand(true);
+                side_host.append(&task_view.root);
+            }
             metadata_view.root.set_vexpand(false);
-            side_host.append(&task_view.root);
             side_host.append(&metadata_view.root);
         } else {
             let side_split = gtk::Paned::new(Orientation::Vertical);
@@ -173,11 +212,15 @@ pub fn build_shell(
             side_split.set_shrink_start_child(false);
             side_split.set_shrink_end_child(false);
             side_split.set_position(layout.workspace_split.min(220));
-            side_split.set_start_child(Some(&task_view.root));
-            side_split.set_end_child(Some(&metadata_view.root));
-            side_host.append(&side_split);
+            if arrangement.show_tasks {
+                side_split.set_start_child(Some(&task_view.root));
+                side_split.set_end_child(Some(&metadata_view.root));
+                side_host.append(&side_split);
+            } else {
+                side_host.append(&metadata_view.root);
+            }
         }
-    } else {
+    } else if arrangement.show_tasks {
         side_host.append(&task_view.root);
     }
 
@@ -201,28 +244,39 @@ pub fn build_shell(
         compact_stack.set_margin_top(0);
         compact_stack.set_margin_bottom(0);
         compact_stack.append(&workspace_view.root);
-        compact_stack.append(&activity_view.root);
+        if arrangement.show_activity {
+            compact_stack.append(&activity_view.root);
+        }
         if arrangement.show_metadata {
             compact_stack.append(&metadata_view.root);
         }
-        compact_stack.append(&task_view.root);
+        if arrangement.show_tasks {
+            compact_stack.append(&task_view.root);
+        }
         let compact_scroll = scroller(&compact_stack);
         compact_scroll.set_hexpand(true);
         compact_scroll.set_vexpand(true);
         body.append(&compact_scroll);
     } else {
-        body_split.set_start_child(Some(&center_column));
-        body_split.set_end_child(Some(&side_host));
-        body.append(&body_split);
+        if arrangement.show_tasks || arrangement.show_metadata {
+            body_split.set_start_child(Some(&center_root));
+            body_split.set_end_child(Some(&side_host));
+            body.append(&body_split);
+        } else {
+            body.append(&center_root);
+        }
     }
 
+    root.append(&chrome_view.root);
     root.append(&body);
+    root.append(&shortcut_bar);
 
     ShellView {
         root,
         chrome_drag_handle: chrome_view.root.clone(),
         refresh_button: chrome_view.refresh_button,
         terminal_button: chrome_view.terminal_button,
+        terminal_panes: workspace_view.terminal_panes,
         rail_buttons: rail_view.workspace_buttons,
         rail_inbox_toggle_button: rail_view.inbox_toggle_button,
         metadata_toggle_button: metadata_view.toggle_button,
@@ -314,7 +368,7 @@ fn body_position_cap(side_width: i32) -> i32 {
 }
 
 pub(crate) fn empty_state(message: &str) -> gtk::Label {
-    let label = gtk::Label::new(Some(message));
+    let label = gtk::Label::new(Some(&message.to_uppercase()));
     label.set_margin_start(14);
     label.set_margin_end(14);
     label.set_margin_top(12);
@@ -395,12 +449,6 @@ pub(crate) fn bind_header_swap(
         false
     });
     target_panel.add_controller(drop_target);
-}
-
-pub(crate) fn pill(label: &str) -> gtk::Label {
-    let pill = gtk::Label::new(Some(label));
-    pill.add_css_class("chrome-pill");
-    pill
 }
 
 pub(crate) fn info_row(label: &str, value: &str) -> gtk::Box {

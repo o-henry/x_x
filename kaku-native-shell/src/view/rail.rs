@@ -1,7 +1,8 @@
-use crate::snapshot::RuntimeSnapshot;
-use crate::view::workspace::workspace_status_tokens;
+use crate::snapshot::{RuntimeSnapshot, WorkspaceSummary};
+use crate::view::display_workspace_name;
 use gtk::prelude::*;
 use gtk::{Align, Orientation};
+
 pub struct RailView {
     pub root: gtk::Box,
     pub workspace_buttons: Vec<(String, gtk::Button)>,
@@ -9,33 +10,12 @@ pub struct RailView {
 }
 
 pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: bool) -> RailView {
-    let rail = gtk::Box::new(Orientation::Vertical, 4);
+    let rail = gtk::Box::new(Orientation::Vertical, 0);
     rail.add_css_class("workspace-rail");
     rail.set_margin_start(0);
     rail.set_margin_end(0);
     rail.set_margin_top(0);
     rail.set_margin_bottom(0);
-
-    let header = gtk::Box::new(Orientation::Horizontal, 10);
-    header.add_css_class("pane-titlebar");
-    header.add_css_class("rail-titlebar");
-    header.set_halign(Align::Fill);
-    header.set_hexpand(true);
-
-    let eyebrow = gtk::Label::new(Some("WORKSPACES"));
-    eyebrow.set_halign(Align::Start);
-    eyebrow.set_hexpand(true);
-    eyebrow.add_css_class("pane-title");
-    eyebrow.set_margin_start(12);
-    eyebrow.set_margin_end(12);
-    eyebrow.set_margin_top(8);
-    eyebrow.set_margin_bottom(8);
-    if collapsed {
-        eyebrow.set_visible(false);
-    }
-
-    header.append(&eyebrow);
-    rail.append(&header);
 
     let top_region = gtk::Box::new(Orientation::Vertical, 0);
     top_region.set_vexpand(true);
@@ -43,10 +23,16 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
 
     let mut workspace_buttons = Vec::new();
     for summary in &snapshot.workspaces {
+        let workspace_group = gtk::Box::new(Orientation::Vertical, 0);
+        workspace_group.add_css_class("rail-workspace-group");
+
         let row = gtk::Button::new();
         row.set_halign(Align::Fill);
         row.set_hexpand(true);
+        row.set_height_request(40);
         row.add_css_class("rail-row");
+        row.add_css_class("rail-workspace-row");
+        row.add_css_class("pane-titlebar");
         if collapsed {
             row.add_css_class("collapsed");
         }
@@ -60,89 +46,71 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
             } else {
                 Orientation::Horizontal
             },
-            if collapsed { 2 } else { 8 },
+            if collapsed { 2 } else { 10 },
         );
         outer.set_hexpand(true);
+        outer.set_valign(Align::Center);
         outer.set_halign(if collapsed {
             Align::Center
         } else {
             Align::Fill
         });
+        outer.set_margin_start(0);
+        outer.set_margin_end(0);
+        outer.set_margin_top(0);
+        outer.set_margin_bottom(0);
 
-        let name_box = gtk::Box::new(Orientation::Vertical, 2);
-        name_box.set_hexpand(!collapsed);
-        name_box.set_halign(if collapsed {
-            Align::Center
-        } else {
-            Align::Fill
-        });
-
-        let collapsed_name = summary
-            .name
+        let display_name = display_workspace_name(&summary.name);
+        let collapsed_name = display_name
             .chars()
             .next()
             .map(|c| c.to_ascii_uppercase().to_string())
             .unwrap_or_else(|| "•".to_string());
-        let name = gtk::Label::new(Some(if collapsed {
-            &collapsed_name
+
+        let name_box = gtk::Box::new(Orientation::Vertical, 1);
+        name_box.set_hexpand(true);
+        name_box.set_valign(Align::Center);
+        name_box.set_halign(if collapsed {
+            Align::Center
         } else {
-            &summary.name
-        }));
+            Align::Start
+        });
+
+        let display_label = if collapsed {
+            collapsed_name.clone()
+        } else {
+            display_name.to_uppercase()
+        };
+        let name = gtk::Label::new(Some(&display_label));
+        name.set_valign(Align::Center);
         name.set_halign(if collapsed {
             Align::Center
         } else {
             Align::Start
         });
+        name.set_hexpand(!collapsed);
         name.add_css_class("rail-name");
-
-        let meta = gtk::Label::new(Some(&workspace_badge_text(
-            summary.unread_count,
-            summary.running_count,
-            summary.failed_count,
-        )));
-        meta.set_halign(if collapsed {
-            Align::Center
-        } else {
-            Align::Start
-        });
-        meta.add_css_class("rail-meta");
-        if collapsed {
-            meta.set_label(&collapsed_badge_text(
-                summary.unread_count,
-                summary.running_count,
-                summary.failed_count,
-                summary.log_count,
-            ));
-        }
         name_box.append(&name);
-        name_box.append(&meta);
-
-        let trailing_text = if collapsed {
-            String::new()
-        } else {
-            workspace_status_tokens(
-                summary.status.as_deref(),
-                summary.progress,
-                summary.log_count,
-            )
-            .join(" ")
-        };
-        let trailing = gtk::Label::new(Some(&trailing_text));
-        trailing.set_halign(Align::End);
-        trailing.add_css_class("rail-trailing");
-        if collapsed {
-            trailing.set_visible(false);
-        }
-
-        outer.append(&name_box);
         if !collapsed {
-            outer.append(&trailing);
+            name_box.set_margin_start(12);
+            name_box.set_margin_end(12);
         }
+        outer.append(&name_box);
         row.set_child(Some(&outer));
 
         workspace_buttons.push((summary.name.clone(), row.clone()));
-        top_region.append(&row);
+        workspace_group.append(&row);
+        if !collapsed {
+            if let Some(items) = workspace_items(snapshot, summary) {
+                workspace_group.append(&items);
+            }
+        }
+        top_region.append(&workspace_group);
     }
+
+    let bottom_section = gtk::Box::new(Orientation::Vertical, 0);
+    bottom_section.set_vexpand(false);
+    rail.append(&bottom_section);
 
     let inbox_toggle_button = gtk::Button::new();
     inbox_toggle_button.add_css_class("rail-toggle-button");
@@ -170,26 +138,29 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     }
     inbox_header.set_halign(Align::Fill);
     inbox_header.set_hexpand(true);
+    inbox_header.set_height_request(40);
     let inbox_label = gtk::Label::new(Some("INBOX"));
     inbox_label.set_halign(Align::Start);
     inbox_label.set_hexpand(true);
+    inbox_label.set_valign(Align::Center);
     inbox_label.add_css_class("pane-title");
+    inbox_label.add_css_class("rail-section-title");
     inbox_label.set_margin_start(12);
     inbox_label.set_margin_end(12);
-    inbox_label.set_margin_top(8);
-    inbox_label.set_margin_bottom(8);
+    inbox_label.set_margin_top(0);
+    inbox_label.set_margin_bottom(0);
     inbox_header.append(&inbox_label);
     inbox_toggle_button.set_valign(Align::Center);
     inbox_toggle_button.set_halign(Align::Center);
     inbox_toggle_button.set_margin_end(10);
     inbox_header.append(&inbox_toggle_button);
-    rail.append(&inbox_header);
+    bottom_section.append(&inbox_header);
 
     let inbox_region = gtk::Box::new(Orientation::Vertical, 0);
     inbox_region.add_css_class("rail-inbox-region");
     inbox_region.set_vexpand(true);
     inbox_region.set_visible(!inbox_collapsed);
-    inbox_region.set_margin_bottom(16);
+    inbox_region.set_margin_bottom(0);
 
     let selected = snapshot.active_workspace.as_str();
     let unread = snapshot
@@ -201,7 +172,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
         .collect::<Vec<_>>();
 
     if unread.is_empty() {
-        let empty = gtk::Label::new(Some("No unread notifications"));
+        let empty = gtk::Label::new(Some("NO UNREAD NOTIFICATIONS"));
         empty.set_halign(Align::Start);
         empty.set_wrap(true);
         empty.set_margin_start(14);
@@ -233,7 +204,7 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
         }
         inbox_region.append(&list);
     }
-    rail.append(&inbox_region);
+    bottom_section.append(&inbox_region);
 
     RailView {
         root: rail,
@@ -242,19 +213,119 @@ pub fn build_rail(snapshot: &RuntimeSnapshot, collapsed: bool, inbox_collapsed: 
     }
 }
 
-pub fn workspace_badge_text(
-    unread_count: usize,
-    running_count: usize,
-    failed_count: usize,
-) -> String {
-    format!("{unread_count}U {running_count}R {failed_count}F")
+fn workspace_items(snapshot: &RuntimeSnapshot, summary: &WorkspaceSummary) -> Option<gtk::Box> {
+    let items = gtk::Box::new(Orientation::Vertical, 0);
+    items.add_css_class("rail-work-items");
+
+    if let Some(detail) = summary
+        .detail
+        .as_deref()
+        .filter(|detail| !detail.trim().is_empty() && detail.trim() != "IDLE")
+    {
+        items.append(&workspace_item_row("WORKTREE", detail, Some("running")));
+    }
+
+    for row in snapshot
+        .notifications
+        .iter()
+        .filter(|row| row.workspace == summary.name && row.unread)
+        .take(4)
+    {
+        let detail = row.body.as_deref().unwrap_or("");
+        items.append(&workspace_item_row(&row.title, detail, Some("unread")));
+    }
+
+    for pane in snapshot
+        .task_panes
+        .iter()
+        .filter(|pane| pane.workspace.as_deref() == Some(summary.name.as_str()))
+        .take(4)
+    {
+        let title = if pane.is_failed {
+            format!("PANE {} FAILED", pane.pane_id)
+        } else if pane.is_dead {
+            format!("PANE {} DONE", pane.pane_id)
+        } else {
+            format!("PANE {} RUNNING", pane.pane_id)
+        };
+        let detail = pane
+            .current_working_dir
+            .as_deref()
+            .map(shorten_work_item_path)
+            .unwrap_or_default();
+        let state = if pane.is_failed {
+            Some("failed")
+        } else if pane.is_dead {
+            None
+        } else {
+            Some("running")
+        };
+        items.append(&workspace_item_row(&title, &detail, state));
+    }
+
+    if items.first_child().is_some() {
+        Some(items)
+    } else {
+        None
+    }
 }
 
-fn collapsed_badge_text(
-    unread_count: usize,
-    running_count: usize,
-    failed_count: usize,
-    log_count: usize,
-) -> String {
-    format!("{unread_count}U {running_count}R {failed_count}F {log_count}L")
+fn workspace_item_row(title: &str, detail: &str, state: Option<&str>) -> gtk::Box {
+    let row = gtk::Box::new(Orientation::Horizontal, 8);
+    row.add_css_class("rail-work-item");
+    row.set_height_request(40);
+    row.set_halign(Align::Fill);
+    row.set_hexpand(true);
+    row.set_valign(Align::Center);
+    if let Some(state) = state {
+        row.add_css_class(&format!("rail-work-item-{state}"));
+    }
+
+    let indicator = gtk::Box::new(Orientation::Horizontal, 0);
+    indicator.add_css_class("rail-work-item-dot");
+    indicator.set_size_request(8, 8);
+    indicator.set_valign(Align::Center);
+    row.append(&indicator);
+
+    let copy = gtk::Box::new(Orientation::Vertical, 2);
+    copy.set_hexpand(true);
+    copy.set_halign(Align::Fill);
+    copy.set_valign(Align::Center);
+
+    let title = gtk::Label::new(Some(&title.to_uppercase()));
+    title.set_halign(Align::Start);
+    title.set_hexpand(true);
+    title.set_valign(Align::Center);
+    title.add_css_class("rail-work-item-title");
+    copy.append(&title);
+
+    if !detail.trim().is_empty() {
+        let detail = gtk::Label::new(Some(&detail.to_uppercase()));
+        detail.set_halign(Align::Start);
+        detail.set_hexpand(true);
+        detail.set_wrap(true);
+        detail.set_valign(Align::Center);
+        detail.add_css_class("rail-work-item-detail");
+        copy.append(&detail);
+    }
+
+    row.append(&copy);
+    row
+}
+
+fn shorten_work_item_path(value: &str) -> String {
+    let without_scheme = value.strip_prefix("file://").unwrap_or(value);
+    let trimmed_home = std::env::var("HOME")
+        .ok()
+        .and_then(|home| without_scheme.strip_prefix(&home).map(|rest| format!("~{rest}")))
+        .unwrap_or_else(|| without_scheme.to_string());
+    let parts = trimmed_home
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.len() <= 3 {
+        return trimmed_home;
+    }
+    let tail = &parts[parts.len() - 3..];
+    format!("…/{}/{}/{}", tail[0], tail[1], tail[2])
 }
