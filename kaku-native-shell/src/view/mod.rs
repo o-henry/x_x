@@ -136,14 +136,13 @@ pub fn build_shell(
         body.append(&rail_view.root);
     }
 
-    let workspace_view =
-        workspace::build_workspace_panel(
-            snapshot,
-            arrangement.show_terminal_sessions,
-            terminals,
-            arrangement.two_pane_split,
-            arrangement.zoomed_terminal_index,
-        );
+    let workspace_view = workspace::build_workspace_panel(
+        snapshot,
+        arrangement.show_terminal_sessions,
+        terminals,
+        arrangement.two_pane_split,
+        arrangement.zoomed_terminal_index,
+    );
     let shortcut_bar = workspace::build_shortcut_bar();
     workspace_view.root.set_hexpand(true);
     workspace_view.root.set_vexpand(true);

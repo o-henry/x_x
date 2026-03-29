@@ -3,8 +3,8 @@ use crate::runtime_bridge::{
     bootstrap_native_shell_runtime, NativeShellBootstrapPlan, NativeShellBootstrapResult,
 };
 use crate::snapshot::{
-    derive_runtime_snapshot, refresh_scope_for_notification, RuntimeSnapshot, ShellLayoutContract,
-    SnapshotRefreshScope, WorkspaceSummary,
+    derive_runtime_snapshot, refresh_scope_for_notification, workspace_location_label,
+    RuntimeSnapshot, ShellLayoutContract, SnapshotRefreshScope, WorkspaceSummary,
 };
 use crate::terminal::{spawn_terminal_handle, TerminalHandle};
 use crate::view::workspace::TwoPaneSplit;
@@ -62,14 +62,18 @@ pub fn shell_ui_contract() -> ShellUiContract {
         primary_surface: "workspace",
         persistent_context_slots: ["inbox", "tasks", "metadata"],
         typography: ShellTypographyContract {
-            primary_mono_family: ["DMMono Nerd Font", "1984대화나눔_본문체_Regular", "monospace"],
+            primary_mono_family: [
+                "DMMono Nerd Font",
+                "1984대화나눔_본문체_Regular",
+                "monospace",
+            ],
             operator_classes: ["chrome-title", "rail-name", "pane-title"],
         },
         affordances: ShellAffordanceContract {
             compact_count_labels: ["1U 2R 0F", "70% 5L", "U1 T2"],
             header_badges: ["◉ unity-main", "3U", "2T"],
             action_labels: [
-                "↻", "shell", "next", "prev", "close", "status", "progress", "reset",
+                "↻", "shell", "close", "tasks", "status", "progress", "log", "reset",
             ],
         },
     }
@@ -399,6 +403,7 @@ impl AppController {
             } else {
                 format!("{shell_count} SHELLS")
             };
+            let location = workspace_location_label(&location);
             summary.detail = Some(format!("{location} • {shell_summary}"));
             summary.running_count = shell_count;
             summary.failed_count = failed_count.max(summary.failed_count);
@@ -438,9 +443,9 @@ impl AppController {
             .collect::<Vec<_>>();
 
         if !local_notifications.is_empty() {
-            snapshot.notifications.retain(|row| {
-                !(row.workspace == workspace_name && row.kind == "shell")
-            });
+            snapshot
+                .notifications
+                .retain(|row| !(row.workspace == workspace_name && row.kind == "shell"));
             snapshot.notifications.extend(local_notifications);
             if let Some(summary) = snapshot
                 .workspaces
@@ -754,24 +759,6 @@ impl AppController {
         }
         self.content_host.append(&root);
         self.mounted_shell_root.replace(Some(root.clone().upcast()));
-        self.window.set_size_request(-1, -1);
-        self.clamp_window_to_workarea();
-    }
-
-    fn clamp_window_to_workarea(&self) {
-        let Some(surface) = self.window.surface() else {
-            return;
-        };
-        let display = surface.display();
-        let Some(monitor) = display.monitor_at_surface(&surface) else {
-            return;
-        };
-        let geometry = monitor.geometry();
-        let max_width = (geometry.width() - 80).max(960);
-        let max_height = (geometry.height() - 80).max(720);
-        let target_width = self.window.width().max(1180).min(max_width);
-        let target_height = self.window.height().max(820).min(max_height);
-        self.window.set_default_size(target_width, target_height);
     }
 
     fn select_workspace(self: &Rc<Self>, workspace: &str) {
@@ -1108,14 +1095,6 @@ impl AppController {
                     this.defer(|controller| controller.toggle_zoom_focused_terminal());
                     true
                 }
-                (gdk::Key::bracketright, false) => {
-                    this.defer(|controller| controller.focus_next_terminal());
-                    true
-                }
-                (gdk::Key::bracketleft, false) => {
-                    this.defer(|controller| controller.focus_previous_terminal());
-                    true
-                }
                 (gdk::Key::w, false) | (gdk::Key::W, false) => {
                     this.defer(|controller| controller.close_focused_terminal());
                     true
@@ -1185,10 +1164,7 @@ impl AppController {
 
         app.set_accels_for_action("win.launch-terminal", &["<Meta>t", "<Primary>t"]);
         app.set_accels_for_action("win.split-right", &["<Meta>d", "<Primary>d"]);
-        app.set_accels_for_action(
-            "win.split-down",
-            &["<Meta><Shift>d", "<Primary><Shift>d"],
-        );
+        app.set_accels_for_action("win.split-down", &["<Meta><Shift>d", "<Primary><Shift>d"]);
         app.set_accels_for_action(
             "win.toggle-split-direction",
             &["<Meta><Shift>s", "<Primary><Shift>s"],
@@ -1196,14 +1172,6 @@ impl AppController {
         app.set_accels_for_action(
             "win.toggle-zoom-terminal",
             &["<Meta><Shift>Return", "<Primary><Shift>Return"],
-        );
-        app.set_accels_for_action(
-            "win.focus-next-terminal",
-            &["<Meta>bracketright", "<Primary>bracketright"],
-        );
-        app.set_accels_for_action(
-            "win.focus-previous-terminal",
-            &["<Meta>bracketleft", "<Primary>bracketleft"],
         );
         app.set_accels_for_action("win.close-terminal", &["<Meta>w", "<Primary>w"]);
         app.set_accels_for_action("win.toggle-rail", &["<Meta>b", "<Primary>b"]);
@@ -1215,31 +1183,16 @@ impl AppController {
             "win.launch-lazygit",
             &["<Meta><Shift>g", "<Primary><Shift>g"],
         );
-        app.set_accels_for_action(
-            "win.launch-yazi",
-            &["<Meta><Shift>y", "<Primary><Shift>y"],
-        );
+        app.set_accels_for_action("win.launch-yazi", &["<Meta><Shift>y", "<Primary><Shift>y"]);
         app.set_accels_for_action("win.open-config", &["<Meta>comma", "<Primary>comma"]);
-        app.set_accels_for_action(
-            "win.toggle-tasks",
-            &["<Meta><Shift>t", "<Primary><Shift>t"],
-        );
+        app.set_accels_for_action("win.toggle-tasks", &["<Meta><Shift>t", "<Primary><Shift>t"]);
         app.set_accels_for_action(
             "win.toggle-metadata",
             &["<Meta><Shift>m", "<Primary><Shift>m"],
         );
-        app.set_accels_for_action(
-            "win.clear-status",
-            &["<Meta><Shift>x", "<Primary><Shift>x"],
-        );
-        app.set_accels_for_action(
-            "win.set-progress",
-            &["<Meta><Shift>p", "<Primary><Shift>p"],
-        );
-        app.set_accels_for_action(
-            "win.append-log",
-            &["<Meta><Shift>l", "<Primary><Shift>l"],
-        );
+        app.set_accels_for_action("win.clear-status", &["<Meta><Shift>x", "<Primary><Shift>x"]);
+        app.set_accels_for_action("win.set-progress", &["<Meta><Shift>p", "<Primary><Shift>p"]);
+        app.set_accels_for_action("win.append-log", &["<Meta><Shift>l", "<Primary><Shift>l"]);
         app.set_accels_for_action("win.run-doctor", &["<Meta><Shift>o", "<Primary><Shift>o"]);
         app.set_accels_for_action("win.reset-shell", &["<Meta><Shift>r", "<Primary><Shift>r"]);
     }

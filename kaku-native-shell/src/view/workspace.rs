@@ -71,15 +71,13 @@ pub fn build_shortcut_bar() -> gtk::ScrolledWindow {
     shortcut_bar()
 }
 
-pub fn shortcut_entries() -> [(&'static str, &'static str); 21] {
+pub fn shortcut_entries() -> [(&'static str, &'static str); 19] {
     [
         ("NEW SHELL", "CMD+T"),
         ("SPLIT RIGHT", "CMD+D"),
         ("SPLIT DOWN", "CMD+SHIFT+D"),
         ("TOGGLE SPLIT", "CMD+SHIFT+S"),
         ("ZOOM", "CMD+SHIFT+ENTER"),
-        ("NEXT PANE", "CMD+]"),
-        ("PREV PANE", "CMD+["),
         ("CLOSE PANE", "CMD+W"),
         ("LAZYGIT", "CMD+SHIFT+G"),
         ("YAZI", "CMD+SHIFT+Y"),
@@ -293,9 +291,14 @@ fn split_vertical(start: impl IsA<gtk::Widget>, end: impl IsA<gtk::Widget>) -> g
 }
 
 fn bind_split_ratio(split: &gtk::Paned, orientation: Orientation, ratio: f64) {
+    let applied = Rc::new(std::cell::Cell::new(false));
     let updater: Rc<dyn Fn()> = {
         let split = split.clone();
+        let applied = Rc::clone(&applied);
         Rc::new(move || {
+            if applied.get() {
+                return;
+            }
             let extent = split.max_position().max(match orientation {
                 Orientation::Horizontal => split.width(),
                 Orientation::Vertical => split.height(),
@@ -303,6 +306,7 @@ fn bind_split_ratio(split: &gtk::Paned, orientation: Orientation, ratio: f64) {
             });
             if extent > 0 {
                 split.set_position(((extent as f64) * ratio).round() as i32);
+                applied.set(true);
             }
         })
     };
@@ -340,7 +344,7 @@ fn bind_split_ratio(split: &gtk::Paned, orientation: Orientation, ratio: f64) {
 fn shortcut_bar() -> gtk::ScrolledWindow {
     let shortcuts = gtk::Box::new(Orientation::Horizontal, 8);
     shortcuts.add_css_class("shortcut-strip");
-    shortcuts.set_hexpand(true);
+    shortcuts.set_hexpand(false);
     shortcuts.set_vexpand(false);
     shortcuts.set_halign(Align::Start);
     shortcuts.set_valign(Align::Center);
@@ -358,13 +362,13 @@ fn shortcut_bar() -> gtk::ScrolledWindow {
     let scroller = gtk::ScrolledWindow::builder()
         .hexpand(true)
         .vexpand(false)
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .hscrollbar_policy(gtk::PolicyType::Never)
         .vscrollbar_policy(gtk::PolicyType::Never)
         .has_frame(false)
         .child(&shortcuts)
         .build();
     scroller.add_css_class("shortcut-bar");
-    scroller.set_overlay_scrolling(true);
+    scroller.set_overlay_scrolling(false);
     scroller.set_kinetic_scrolling(false);
     scroller.set_min_content_width(0);
     scroller.set_size_request(0, -1);
@@ -372,6 +376,7 @@ fn shortcut_bar() -> gtk::ScrolledWindow {
     scroller.set_propagate_natural_height(false);
     scroller.set_halign(Align::Fill);
     scroller.set_valign(Align::Center);
+    scroller.set_can_focus(false);
 
     let drag_origin = Rc::new(Cell::new(0.0));
     let scroller_begin = scroller.clone();
@@ -387,9 +392,11 @@ fn shortcut_bar() -> gtk::ScrolledWindow {
         let adjustment = scroller_update.hadjustment();
         let max_value = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
         let next = (drag_origin_update.get() - offset_x).clamp(adjustment.lower(), max_value);
-        adjustment.set_value(next);
+        if (adjustment.value() - next).abs() >= 0.5 {
+            adjustment.set_value(next);
+        }
     });
-    shortcuts.add_controller(drag);
+    scroller.add_controller(drag);
     scroller
 }
 

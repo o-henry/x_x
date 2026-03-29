@@ -27,7 +27,6 @@ const TERMINAL_INSET_X: f64 = 12.0;
 const TERMINAL_INSET_Y: f64 = 10.0;
 const TERMINAL_FONT_DESC: &str = "DMMono Nerd Font 12";
 const TERMINAL_STATUS_TITLE_PREFIX: &str = "kaku-status:";
-
 #[link(name = "pangocairo-1.0")]
 unsafe extern "C" {
     fn pango_cairo_show_layout(
@@ -163,7 +162,9 @@ pub fn build_terminal_widget(handle: Rc<TerminalHandle>) -> TerminalWidgetView {
     apply_terminal_strip_state(
         &path_label,
         &status_badge,
-        initial_snapshot.as_ref().map(|snapshot| &snapshot.strip_state),
+        initial_snapshot
+            .as_ref()
+            .map(|snapshot| &snapshot.strip_state),
         &handle.title,
     );
     let snapshot_state = Rc::new(RefCell::new(initial_snapshot));
@@ -228,8 +229,6 @@ pub fn build_terminal_widget(handle: Rc<TerminalHandle>) -> TerminalWidgetView {
             let shifted = state.contains(gdk::ModifierType::SHIFT_MASK);
             let action = match (key, shifted) {
                 (gdk::Key::t, false) | (gdk::Key::T, false) => Some("win.launch-terminal"),
-                (gdk::Key::bracketright, false) => Some("win.focus-next-terminal"),
-                (gdk::Key::bracketleft, false) => Some("win.focus-previous-terminal"),
                 (gdk::Key::w, false) | (gdk::Key::W, false) => Some("win.close-terminal"),
                 (gdk::Key::b, false) | (gdk::Key::B, false) => Some("win.toggle-rail"),
                 (gdk::Key::a, true) | (gdk::Key::A, true) => Some("win.toggle-activity"),
@@ -540,13 +539,13 @@ fn schedule_terminal_pump(
                             let mut chunks = 0usize;
                             let mut bytes_processed = 0usize;
                             loop {
-                                let next_chunk = if let Ok(mut backlog) = live.backlog.try_borrow_mut()
-                                {
-                                    backlog.pop_front()
-                                } else {
-                                    None
-                                }
-                                .or_else(|| rx.try_recv().ok());
+                                let next_chunk =
+                                    if let Ok(mut backlog) = live.backlog.try_borrow_mut() {
+                                        backlog.pop_front()
+                                    } else {
+                                        None
+                                    }
+                                    .or_else(|| rx.try_recv().ok());
 
                                 let Some(bytes) = next_chunk else {
                                     break;
@@ -793,16 +792,13 @@ fn prepare_minimal_shell_config(
     shell_name: &str,
     cache: &OnceLock<PathBuf>,
 ) -> Result<PathBuf, String> {
-    let config_dir = cache
-        .get()
-        .cloned()
-        .unwrap_or_else(|| {
-            std::env::temp_dir().join(format!(
-                "kaku-native-shell-shared-{}-{}",
-                shell_name,
-                std::process::id()
-            ))
-        });
+    let config_dir = cache.get().cloned().unwrap_or_else(|| {
+        std::env::temp_dir().join(format!(
+            "kaku-native-shell-shared-{}-{}",
+            shell_name,
+            std::process::id()
+        ))
+    });
     fs::create_dir_all(&config_dir)
         .map_err(|err| format!("Failed to create shell config dir: {err}"))?;
 
@@ -1123,7 +1119,10 @@ fn terminal_strip_state_from_title(raw_title: &str) -> Option<TerminalStripState
         127 => Some("NOT FOUND".to_string()),
         code => Some(format!("EXIT {code}")),
     };
-    Some(TerminalStripState { title, status_badge })
+    Some(TerminalStripState {
+        title,
+        status_badge,
+    })
 }
 
 fn draw_terminal_surface(
@@ -1134,7 +1133,7 @@ fn draw_terminal_surface(
     snapshot: Option<&TerminalRenderSnapshot>,
 ) {
     let Some(snapshot) = snapshot else {
-        cr.set_source_rgb(0.05, 0.06, 0.08);
+        cr.set_source_rgb(16.0 / 255.0, 18.0 / 255.0, 25.0 / 255.0);
         let _ = cr.paint();
         return;
     };
@@ -1222,7 +1221,7 @@ fn terminal_font_description() -> pango::FontDescription {
 }
 
 fn apply_native_shell_palette(palette: &mut ColorPalette) {
-    palette.background = (0x3e, 0x41, 0x49).into();
+    palette.background = (0x10, 0x12, 0x19).into();
     palette.foreground = (0xea, 0xec, 0xf4).into();
     palette.cursor_bg = (0x6f, 0xd6, 0xa7).into();
     palette.cursor_fg = (0x10, 0x11, 0x16).into();
@@ -1269,9 +1268,9 @@ fn render_terminal_line(
     for cell in line.visible_cells() {
         let base_style = style_for_cell(cell.attrs(), palette, reverse_video);
         let width = cell.width().max(1);
-        let style = if let Some(cursor) = cursor.filter(|cursor| {
-            cursor.col >= cell_col && cursor.col < cell_col + width
-        }) {
+        let style = if let Some(cursor) =
+            cursor.filter(|cursor| cursor.col >= cell_col && cursor.col < cell_col + width)
+        {
             cursor_style_for_cell(&base_style, cursor)
         } else {
             base_style
@@ -1562,8 +1561,8 @@ mod tests {
 
     #[test]
     fn parses_terminal_title_payload_for_generic_failure() {
-        let parsed =
-            terminal_strip_state_from_title("kaku-status:2:/tmp/work").expect("payload should parse");
+        let parsed = terminal_strip_state_from_title("kaku-status:2:/tmp/work")
+            .expect("payload should parse");
         assert_eq!(parsed.title, "/tmp/work");
         assert_eq!(parsed.status_badge.as_deref(), Some("EXIT 2"));
     }

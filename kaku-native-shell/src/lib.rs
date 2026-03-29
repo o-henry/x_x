@@ -9,9 +9,9 @@ pub mod view;
 use adw::prelude::*;
 use app_controller::AppController;
 use gtk::gio;
-use styles::install_css;
 use std::fs;
 use std::path::PathBuf;
+use styles::install_css;
 
 pub fn run() {
     install_bundled_fontconfig();

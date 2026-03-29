@@ -207,23 +207,36 @@ pub fn install_css() {
           color: #94a8db;
         }
 
-        .rail-workspace-group {
-          border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-
         .rail-work-items {
-          padding: 6px 0 10px 0;
+          padding: 0;
           background: rgba(255,255,255,0.02);
         }
 
         .rail-work-item {
           min-height: 40px;
           padding: 0 12px;
-          border-bottom: 1px solid rgba(255,255,255,0.06);
+          background: transparent;
+          box-shadow: inset 0 -1px rgba(255,255,255,0.06);
         }
 
-        .rail-work-items > :last-child.rail-work-item {
-          border-bottom: none;
+        .rail-work-items-list {
+          background: transparent;
+        }
+
+        .rail-work-items-list row,
+        .rail-work-items-list row:selected,
+        .rail-work-items-list row:hover,
+        .rail-work-items-list row:focus,
+        .rail-work-items-list row:focus-visible {
+          background: transparent;
+          box-shadow: none;
+          outline: none;
+        }
+
+        .rail-work-item-content {
+          min-height: 39px;
+          padding: 0;
+          margin: 0;
         }
 
         .rail-work-item-dot {
@@ -248,18 +261,34 @@ pub fn install_css() {
 
         .rail-work-item-title {
           font-family: 'DMMono Nerd Font', monospace;
+          font-size: 10px;
+          font-weight: 600;
+          color: #8d8e99;
+          margin: 0;
+          padding: 0;
+          min-width: 68px;
+        }
+
+        .rail-work-item-primary {
+          font-family: 'DMMono Nerd Font', monospace;
           font-size: 11px;
           font-weight: 600;
           color: #d7d9e4;
           margin: 0;
           padding: 0;
-          line-height: 1.0;
         }
 
-        .rail-work-item-detail {
+        .rail-work-item-trailing {
+          font-family: 'DMMono Nerd Font', monospace;
+          font-size: 9px;
+          color: #94a8db;
           margin: 0;
           padding: 0;
-          line-height: 1.0;
+        }
+
+        .rail-work-items-list row:last-child,
+        .rail-work-items-list row:last-child .rail-work-item {
+          box-shadow: none;
         }
 
         .rail-row:focus,
@@ -328,7 +357,7 @@ pub fn install_css() {
         }
 
         .live-terminal-host {
-          background: #0d0f14;
+          background: #101219;
         }
 
         .workspace-title {
@@ -490,7 +519,7 @@ pub fn install_css() {
         }
 
         .terminal-host {
-          background: #0d0f14;
+          background: #101219;
           border: none;
           min-height: 0;
         }
@@ -552,7 +581,7 @@ pub fn install_css() {
         }
 
         .terminal-view {
-          background: #3e4149;
+          background: #101219;
           color: #edf0f8;
           caret-color: #f4f6fb;
           font-family: 'DMMono Nerd Font', monospace;

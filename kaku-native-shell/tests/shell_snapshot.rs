@@ -70,7 +70,11 @@ fn shell_typography_contract() {
     let contract = shell_ui_contract();
     assert_eq!(
         contract.typography.primary_mono_family,
-        ["DMMono Nerd Font", "1984대화나눔_본문체_Regular", "monospace"]
+        [
+            "DMMono Nerd Font",
+            "1984대화나눔_본문체_Regular",
+            "monospace"
+        ]
     );
     assert!(contract
         .typography
@@ -100,8 +104,8 @@ fn shell_affordance_contract() {
         .any(|label| label.chars().any(|ch| !ch.is_ascii_alphanumeric())));
     assert!(contract.affordances.action_labels.contains(&"↻"));
     assert!(contract.affordances.action_labels.contains(&"shell"));
-    assert!(contract.affordances.action_labels.contains(&"next"));
     assert!(contract.affordances.action_labels.contains(&"close"));
+    assert!(contract.affordances.action_labels.contains(&"tasks"));
 }
 
 #[test]
@@ -112,8 +116,6 @@ fn native_shell_shortcut_strip_tracks_real_pane_actions() {
     assert!(entries.contains(&("SPLIT DOWN", "CMD+SHIFT+D")));
     assert!(entries.contains(&("TOGGLE SPLIT", "CMD+SHIFT+S")));
     assert!(entries.contains(&("ZOOM", "CMD+SHIFT+ENTER")));
-    assert!(entries.contains(&("NEXT PANE", "CMD+]")));
-    assert!(entries.contains(&("PREV PANE", "CMD+[")));
     assert!(entries.contains(&("CLOSE PANE", "CMD+W")));
     assert!(entries.contains(&("LAZYGIT", "CMD+SHIFT+G")));
     assert!(entries.contains(&("YAZI", "CMD+SHIFT+Y")));

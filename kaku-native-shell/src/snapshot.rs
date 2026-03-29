@@ -160,13 +160,13 @@ impl RuntimeSnapshot {
                     running_count,
                     failed_count,
                     status: statuses
-                    .iter()
-                    .find(|record| record.workspace == *name)
-                    .map(|record| record.status.clone()),
+                        .iter()
+                        .find(|record| record.workspace == *name)
+                        .map(|record| record.status.clone()),
                     progress: progresses
-                    .iter()
-                    .find(|record| record.workspace == *name)
-                    .map(|record| record.value),
+                        .iter()
+                        .find(|record| record.workspace == *name)
+                        .map(|record| record.value),
                     log_count: if name == &active_workspace {
                         logs.len()
                     } else {
@@ -201,7 +201,7 @@ fn workspace_detail(
 
     let location = pane
         .and_then(|record| record.current_working_dir.as_deref())
-        .and_then(|cwd| git_branch_for_cwd(cwd).or_else(|| Some(friendly_display_path(cwd))));
+        .map(workspace_location_label);
 
     let shell_summary = match running_count {
         0 if failed_count > 0 => Some("FAILED".to_string()),
@@ -241,6 +241,10 @@ fn git_branch_for_cwd(cwd: &str) -> Option<String> {
             .map(|branch| branch.replace('-', " ").to_uppercase());
     }
     None
+}
+
+pub fn workspace_location_label(cwd: &str) -> String {
+    git_branch_for_cwd(cwd).unwrap_or_else(|| friendly_display_path(cwd))
 }
 
 fn discover_git_dir(start: &Path) -> Option<PathBuf> {

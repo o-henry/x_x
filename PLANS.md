@@ -218,6 +218,21 @@ while preserving vanilla Kaku's feel.
   `WORKSPACE` row reuse the same titlebar rhythm as `INBOX`, simplify
   terminal font selection to a real Pango font description that reliably
   resolves to `DM Mono`, and remove the custom scrollbar CSS that is still
+  Current split stabilization follow-up:
+  stop newly created terminal splits from visibly shaking on `cmd+t` by
+  making initial `gtk::Paned` position binding settle once per fresh split
+  instead of reapplying on every early size/max-position notification during
+  widget map and relayout
+  Current shortcut-strip stabilization follow-up:
+  stop the bottom shortcut strip from violently shaking while drag-scrolling
+  by handling pointer drag at the scroller level, hiding the horizontal
+  scrollbar properly, and preventing the strip content from re-expanding
+  against the viewport during drag updates
+  Current rail fix strategy change:
+  stop trying to coerce the `WORKTREE` line through `ListBoxRow` CSS because
+  GTK row internals keep swallowing the spacing tweaks; rebuild the rail
+  work-item line as a plain fixed-height native box row so vertical rhythm
+  and centering are controlled directly by our own layout tree
   provoking GTK slider warnings during startup
   Current implementation + verification track:
   1. move native-shell runtime bootstrap off the GTK main thread so cold start
@@ -248,6 +263,11 @@ while preserving vanilla Kaku's feel.
   smoke mode now also confirms `text_rendered_ok=true` and `reset_ok=true`, and
   direct live verification re-confirmed a friendly shell prompt plus successful
   `CMD+T` growth to three panes after the shell bootstrap changes
+  Current UI regression fix on 2026-03-29:
+  normalize the workspace rail item-row rhythm so stacked rows keep one fixed
+  height, remove the extra left-rail `INBOX` section from the current shell
+  layout, and re-harden `CMD+]` / `CMD+[` pane focus cycling against macOS
+  shortcut delivery quirks before the next verification pass
   Current direct-execution closeout loop:
   1. launch the app like a user would from a real terminal session, not just
      via `cargo check`, and treat startup hangs as blocking failures
@@ -319,6 +339,7 @@ while preserving vanilla Kaku's feel.
 - ~~persistent left rail and inbox/context panes exist in the native shell~~
 - ~~workspace status / progress / log / unread metadata is surfaced in native-shell side panels~~
 - workspace rows should keep getting richer agent/worktree identity, including stronger agent naming and branch fidelity when multi-agent sessions become primary
+- rail work-item rows now need an explicit compact variant contract so title/detail/icon alignment stops regressing when the content changes
 - ~~smoke harness verifies startup, split growth, text injection, rendered output, close-pane, focus-cycle, and reset~~
 - native-shell control plane still needs more direct Kaku parity for operator flows beyond the current rail/context surfaces
 - terminal body font and glyph fallback still need final visual polish for Korean + Nerd Font icon parity
